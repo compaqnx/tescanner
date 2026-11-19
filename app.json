@@ -7,7 +7,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Tescanner uses Bluetooth to connect to your OBD adapter and read Tesla CAN telemetry.",
+        "NSBluetoothPeripheralUsageDescription": "Tescanner uses Bluetooth to connect to your OBD adapter and read Tesla CAN telemetry."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -16,10 +20,24 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN"
+      ],
+      "package": "com.anonymous.Tescanner"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router",
+      "react-native-ble-plx",
+      "expo-sharing",
+      "expo-sqlite"
+    ]
   }
 }

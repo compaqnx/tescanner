@@ -1,0 +1,11 @@
+Source repository: https://github.com/commaai/opendbc
+Raw base URL: https://raw.githubusercontent.com/commaai/opendbc/master
+Requested files:
+ - opendbc/dbc/tesla_can.dbc
+ - opendbc/dbc/tesla_powertrain.dbc
+License URL: https://raw.githubusercontent.com/commaai/opendbc/master/LICENSE
+Fetched at (UTC): 2026-11-19T10:23:17Z
+Downloaded files:
+ - assets/can/TeslaSx_tesla_can.dbc (54247 bytes)
+ - assets/can/TeslaSx_tesla_powertrain.dbc (7716 bytes)
+ - docs/third_party/opendbc_LICENSE (1059 bytes)
