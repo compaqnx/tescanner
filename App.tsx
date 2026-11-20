@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SignalTile, TelemetryStatus, useTelemetryController } from './src/app/useTelemetryController';
+import { estimateCycleMs } from './src/lib/can/pollPlan';
 import { pickHvAccessorySignals, pickHvCellSignals } from './src/lib/hv/hvSignalCatalog';
 import { LocaleCode, localizeTelemetryError, TranslationKey, translate } from './src/lib/i18n/localization';
 
@@ -247,6 +248,10 @@ function AppShell() {
     lastExportUri,
     canFilterEnabled,
     setCanFilterEnabled,
+    pollCatalog,
+    disabledPollIds,
+    togglePollId,
+    setAllPollEnabled,
   } = useTelemetryController();
 
   const [locale, setLocale] = useState<LocaleCode>('en');
@@ -645,6 +650,15 @@ function AppShell() {
   );
 
   const drawerTopPadding = insets.top + 12;
+
+  const enabledPollInfos = useMemo(
+    () => pollCatalog.filter((info) => !disabledPollIds.has(info.id)),
+    [pollCatalog, disabledPollIds],
+  );
+  const pollCycleSeconds = useMemo(
+    () => (estimateCycleMs(enabledPollInfos) / 1000).toFixed(1),
+    [enabledPollInfos],
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -1336,6 +1350,60 @@ function AppShell() {
                   </Pressable>
                 </View>
               </View>
+
+              {canFilterEnabled && pollCatalog.length > 0 ? (
+                <View style={styles.settingsBlock}>
+                  <Text style={styles.settingsLabel}>{t('sectionSignalSelection')}</Text>
+                  <Text style={styles.settingsHint}>{t('signalSelectionHint')}</Text>
+                  <Text style={styles.settingsHint}>
+                    {t('signalSelectionRefresh', { value: `${pollCycleSeconds}s`, count: enabledPollInfos.length })}
+                  </Text>
+                  <View style={styles.actionRow}>
+                    <Pressable
+                      onPress={() => setAllPollEnabled(true)}
+                      disabled={status === 'streaming'}
+                      style={({ pressed }) => [styles.ghostButton, pressed && styles.buttonPressed]}
+                    >
+                      <Text style={styles.ghostButtonText}>{t('signalSelectionSelectAll')}</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setAllPollEnabled(false)}
+                      disabled={status === 'streaming'}
+                      style={({ pressed }) => [styles.ghostButton, pressed && styles.buttonPressed]}
+                    >
+                      <Text style={styles.ghostButtonText}>{t('signalSelectionSelectNone')}</Text>
+                    </Pressable>
+                  </View>
+                  {pollCatalog.map((info) => {
+                    const enabled = !disabledPollIds.has(info.id);
+                    return (
+                      <Pressable
+                        key={info.id}
+                        onPress={() => togglePollId(info.id)}
+                        disabled={status === 'streaming'}
+                        style={({ pressed }) => [
+                          { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 8 },
+                          pressed && styles.buttonPressed,
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name={enabled ? 'check-circle' : 'checkbox-blank-circle-outline'}
+                          size={18}
+                          color={enabled ? NEON : '#6F7B7A'}
+                        />
+                        <View style={styles.signalInfoCell}>
+                          <Text style={styles.signalName}>{info.label}</Text>
+                          <Text style={styles.signalMeta}>
+                            {`0x${info.id.toString(16).toUpperCase()}${info.multiplexed ? ' · mux' : ''} · ${
+                              info.category === 'hv' ? t('signalSelectionHv') : t('signalSelectionCore')
+                            }`}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
             </View>
           ) : null}
         </ScrollView>

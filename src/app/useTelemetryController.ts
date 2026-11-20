@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { VLinkerBleClient, type BleDeviceInfo } from '../lib/ble/VLinkerBleClient';
 import { Elm327Session } from '../lib/can/elm327Session';
-import { derivePollTargets } from '../lib/can/pollPlan';
+import { describePollTargets, PollTarget, PollTargetInfo, toPollTargets } from '../lib/can/pollPlan';
 import { CanFrame, DecodedSignal } from '../lib/can/types';
 import { decodeCanFrame } from '../lib/dbc/decodeCanFrame';
 import { DbcDatabase } from '../lib/dbc/types';
@@ -59,6 +59,8 @@ export function useTelemetryController() {
   const [selectedVehicleProfileId, setSelectedVehicleProfileId] =
     useState<VehicleProfileId>(DEFAULT_VEHICLE_PROFILE_ID);
   const [canFilterEnabled, setCanFilterEnabled] = useState(true);
+  const [pollCatalog, setPollCatalog] = useState<PollTargetInfo[]>([]);
+  const [disabledPollIds, setDisabledPollIds] = useState<Set<number>>(new Set());
 
   const selectedVehicleProfile = useMemo(
     () => getVehicleProfileById(selectedVehicleProfileId),
@@ -272,6 +274,18 @@ export function useTelemetryController() {
       return;
     }
 
+    // Resolve the poll targets before opening a session so a bad selection does
+    // not leave a half-started session behind.
+    let targets: PollTarget[] | null = null;
+    if (canFilterEnabled) {
+      const catalog = pollCatalog.length > 0 ? pollCatalog : describePollTargets(dbc, selectedVehicleProfile);
+      targets = toPollTargets(catalog.filter((info) => !disabledPollIds.has(info.id)));
+      if (targets.length === 0) {
+        setError('Select at least one signal group to stream.');
+        return;
+      }
+    }
+
     setError(null);
     clearLiveSignalCache(true);
 
@@ -298,18 +312,24 @@ export function useTelemetryController() {
       });
     };
 
-    // Filtered monitoring requests only the ids this profile decodes, so the
-    // adapter is not overwhelmed by the full bus. Raw monitor-all remains as an
-    // opt-out for debugging or unusual buses.
-    if (canFilterEnabled) {
-      const targets = derivePollTargets(dbc, selectedVehicleProfile);
+    // Filtered monitoring requests only the selected ids, so the adapter is not
+    // overwhelmed by the full bus. Raw monitor-all remains as an opt-out.
+    if (targets) {
       await elm.startFilteredMonitoring(targets, onFrame);
     } else {
       await elm.startMonitoring(onFrame);
     }
 
     setStatus('streaming');
-  }, [canFilterEnabled, clearLiveSignalCache, handleDecodedSignals, pushFrameForUi, selectedVehicleProfile]);
+  }, [
+    canFilterEnabled,
+    clearLiveSignalCache,
+    disabledPollIds,
+    handleDecodedSignals,
+    pollCatalog,
+    pushFrameForUi,
+    selectedVehicleProfile,
+  ]);
 
   const setVehicleProfile = useCallback(
     async (profileId: VehicleProfileId): Promise<void> => {
@@ -326,7 +346,10 @@ export function useTelemetryController() {
       setStatus('booting');
 
       try {
-        dbcRef.current = await loadVehicleDbc(profileId);
+        const nextDbc = await loadVehicleDbc(profileId);
+        dbcRef.current = nextDbc;
+        setPollCatalog(describePollTargets(nextDbc, getVehicleProfileById(profileId)));
+        setDisabledPollIds(new Set());
         setSelectedVehicleProfileId(profileId);
         clearLiveSignalCache(true);
         setStatus('idle');
@@ -337,6 +360,25 @@ export function useTelemetryController() {
       }
     },
     [clearLiveSignalCache, selectedVehicleProfileId, status],
+  );
+
+  const togglePollId = useCallback((id: number) => {
+    setDisabledPollIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const setAllPollEnabled = useCallback(
+    (enabled: boolean) => {
+      setDisabledPollIds(enabled ? new Set<number>() : new Set(pollCatalog.map((info) => info.id)));
+    },
+    [pollCatalog],
   );
 
   const sendAtCommand = useCallback(async (command: string): Promise<string[]> => {
@@ -380,8 +422,10 @@ export function useTelemetryController() {
       storeRef.current = store;
 
       try {
-        dbcRef.current = await loadVehicleDbc(DEFAULT_VEHICLE_PROFILE_ID);
+        const bootDbc = await loadVehicleDbc(DEFAULT_VEHICLE_PROFILE_ID);
+        dbcRef.current = bootDbc;
         if (mounted) {
+          setPollCatalog(describePollTargets(bootDbc, getVehicleProfileById(DEFAULT_VEHICLE_PROFILE_ID)));
           setStatus('idle');
         }
       } catch (bootstrapError) {
@@ -447,6 +491,10 @@ export function useTelemetryController() {
     selectedVehicleProfile,
     canFilterEnabled,
     setCanFilterEnabled,
+    pollCatalog,
+    disabledPollIds,
+    togglePollId,
+    setAllPollEnabled,
     scanForAdapters,
     stopScan,
     connectToAdapter,

@@ -88,6 +88,13 @@ const EN: Dictionary = {
     'Request only the signals this profile decodes so the adapter is not flooded by the whole bus. Turn off to monitor every frame (debug).',
   settingsCanFilterOn: 'On',
   settingsCanFilterOff: 'Off',
+  sectionSignalSelection: 'Signal selection',
+  signalSelectionHint: 'Choose which signal groups to poll. Fewer groups refresh faster.',
+  signalSelectionRefresh: 'Full refresh ≈ {value} · {count} groups',
+  signalSelectionSelectAll: 'All',
+  signalSelectionSelectNone: 'None',
+  signalSelectionCore: 'Core',
+  signalSelectionHv: 'HV / battery',
   profileModel3yName: 'Model 3 / Y',
   profileModel3yDesc: 'Model 3 and Model Y telemetry profile.',
   profileModelsxName: 'Model S / X (2015-2021)',
@@ -165,6 +172,7 @@ const EN: Dictionary = {
   errSwitchProfileIdle: 'Switch vehicle profile while idle. Disconnect and stop streaming first.',
   errAdapterNotConnected: 'Adapter is not connected.',
   errCommandWhileStreaming: 'Stop the live stream before sending commands.',
+  errNoPollSelection: 'Select at least one signal group to stream.',
 
   genericUnknown: 'Unknown',
 };
@@ -255,6 +263,13 @@ const RO: Dictionary = {
     'Cere doar semnalele decodate de acest profil, ca adaptorul sa nu fie inundat de tot bus-ul. Dezactiveaza pentru a monitoriza fiecare cadru (debug).',
   settingsCanFilterOn: 'Pornit',
   settingsCanFilterOff: 'Oprit',
+  sectionSignalSelection: 'Selectie semnale',
+  signalSelectionHint: 'Alege ce grupuri de semnale sa polezi. Mai putine grupuri = reimprospatare mai rapida.',
+  signalSelectionRefresh: 'Reimprospatare completa ≈ {value} · {count} grupuri',
+  signalSelectionSelectAll: 'Toate',
+  signalSelectionSelectNone: 'Niciunul',
+  signalSelectionCore: 'Principale',
+  signalSelectionHv: 'HV / baterie',
   profileModel3yName: 'Model 3 / Y',
   profileModel3yDesc: 'Profil telemetrie pentru Model 3 si Model Y.',
   profileModelsxName: 'Model S / X (2015-2021)',
@@ -332,6 +347,7 @@ const RO: Dictionary = {
   errSwitchProfileIdle: 'Schimba profilul doar in stare inactiva. Deconecteaza si opreste stream-ul.',
   errAdapterNotConnected: 'Adaptorul nu este conectat.',
   errCommandWhileStreaming: 'Opreste stream-ul live inainte de a trimite comenzi.',
+  errNoPollSelection: 'Selecteaza cel putin un grup de semnale pentru streaming.',
 
   genericUnknown: 'Necunoscut',
 };
@@ -375,6 +391,8 @@ export function localizeTelemetryError(locale: LocaleCode, rawError: string | nu
       return translate(locale, 'errAdapterNotConnected');
     case 'Stop the live stream before sending commands.':
       return translate(locale, 'errCommandWhileStreaming');
+    case 'Select at least one signal group to stream.':
+      return translate(locale, 'errNoPollSelection');
     default:
       return rawError;
   }

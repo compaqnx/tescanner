@@ -9,67 +9,104 @@ export interface PollTarget {
   dwellMs: number;
 }
 
+export interface PollTargetInfo extends PollTarget {
+  /** Human label built from the signals the message carries. */
+  label: string;
+  /** 'core' = a dashboard/watched signal; 'hv' = cell/accessory data. */
+  category: 'core' | 'hv';
+  /** True when the message is multiplexed (one id, several mux groups). */
+  multiplexed: boolean;
+  /** How many decodable signals of interest the message carries. */
+  signalCount: number;
+}
+
 // A plain message is sampled briefly; a multiplexed message (one id, many mux
 // groups such as the per-brick voltages on 0x401) is held longer so a visit can
 // capture several groups before moving on.
 const BASE_DWELL_MS = 120;
 const MUX_DWELL_MS = 350;
+// Per-visit cost beyond the dwell: the filter command plus the stop gap between
+// ids. Used only to estimate the full-cycle refresh time shown in the UI.
+const PER_TARGET_OVERHEAD_MS = 100;
 
 const HV_ACCESSORY_SET = new Set(HV_ACCESSORY_PRIORITIES);
 
+function cleanMessageName(name: string): string {
+  const stripped = name.replace(/^ID\d+/, '').trim();
+  return stripped.length > 0 ? stripped : name;
+}
+
 /**
- * Works out the set of CAN ids worth requesting for a profile, so the adapter can
- * be told to forward only those frames (via a receive-address filter) instead of
- * the whole bus. Unfiltered monitor-all overwhelms an ELM327/STN Bluetooth link on
- * a live Tesla bus, which is the problem Scan My Tesla solves with hardware filters.
- *
- * Priority ids carry a dashboard/watched signal and are visited first; secondary
- * ids carry HV cell/accessory data. Signals outside these sets are not requested,
- * matching the "choose what to log to stay fast" trade-off.
+ * Builds the catalog of CAN ids worth requesting for a profile, each described
+ * so the user can pick which to poll. Requesting only the selected ids (via a
+ * receive-address filter) keeps an ELM327/STN Bluetooth link from being flooded
+ * by the whole bus — the trade-off Scan My Tesla exposes as "choose what to log".
  */
-export function derivePollTargets(dbc: DbcDatabase, profile: VehicleProfileDefinition): PollTarget[] {
+export function describePollTargets(dbc: DbcDatabase, profile: VehicleProfileDefinition): PollTargetInfo[] {
   const aliasLookup = buildAliasLookup(profile);
 
-  const priorityIds: number[] = [];
-  const secondaryIds: number[] = [];
-  const multiplexedIds = new Set<number>();
-  const seen = new Set<number>();
+  const core: PollTargetInfo[] = [];
+  const hv: PollTargetInfo[] = [];
 
   for (const message of Object.values(dbc.messages)) {
-    let relevant = false;
-    let isPriority = false;
+    const aliasLabels = new Set<string>();
+    let hasHvSignal = false;
     let hasMultiplexor = false;
+    let signalCount = 0;
 
     for (const signal of Object.values(message.signals)) {
       if (signal.multiplex === 'M') {
         hasMultiplexor = true;
       }
 
-      if (aliasLookup.has(signal.name) || aliasLookup.has(signal.name.toLowerCase())) {
-        relevant = true;
-        isPriority = true;
+      const resolved = aliasLookup.get(signal.name) ?? aliasLookup.get(signal.name.toLowerCase());
+      if (resolved) {
+        aliasLabels.add(resolved.label);
+        signalCount += 1;
       } else if (isHvCellSignal(signal.name) || HV_ACCESSORY_SET.has(signal.name)) {
-        relevant = true;
+        hasHvSignal = true;
+        signalCount += 1;
       }
     }
 
-    if (!relevant || seen.has(message.id)) {
+    if (aliasLabels.size === 0 && !hasHvSignal) {
       continue;
     }
 
-    seen.add(message.id);
-    if (hasMultiplexor) {
-      multiplexedIds.add(message.id);
-    }
-    if (isPriority) {
-      priorityIds.push(message.id);
+    const dwellMs = hasMultiplexor ? MUX_DWELL_MS : BASE_DWELL_MS;
+
+    if (aliasLabels.size > 0) {
+      const labels = Array.from(aliasLabels);
+      const label = labels.slice(0, 2).join(', ') + (labels.length > 2 ? '…' : '');
+      core.push({ id: message.id, dwellMs, label, category: 'core', multiplexed: hasMultiplexor, signalCount });
     } else {
-      secondaryIds.push(message.id);
+      hv.push({
+        id: message.id,
+        dwellMs,
+        label: cleanMessageName(message.name),
+        category: 'hv',
+        multiplexed: hasMultiplexor,
+        signalCount,
+      });
     }
   }
 
-  return [...priorityIds, ...secondaryIds].map((id) => ({
-    id,
-    dwellMs: multiplexedIds.has(id) ? MUX_DWELL_MS : BASE_DWELL_MS,
-  }));
+  core.sort((a, b) => a.id - b.id);
+  hv.sort((a, b) => a.id - b.id);
+
+  return [...core, ...hv];
+}
+
+export function toPollTargets(infos: PollTargetInfo[]): PollTarget[] {
+  return infos.map((info) => ({ id: info.id, dwellMs: info.dwellMs }));
+}
+
+/** Estimated time for one full pass over the given targets, in milliseconds. */
+export function estimateCycleMs(infos: Array<Pick<PollTargetInfo, 'dwellMs'>>): number {
+  return infos.reduce((sum, info) => sum + info.dwellMs + PER_TARGET_OVERHEAD_MS, 0);
+}
+
+/** Convenience: every pollable target for a profile, as adapter targets. */
+export function derivePollTargets(dbc: DbcDatabase, profile: VehicleProfileDefinition): PollTarget[] {
+  return toPollTargets(describePollTargets(dbc, profile));
 }
