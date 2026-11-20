@@ -119,11 +119,42 @@ function decodeSignal(signal: DbcSignal, frame: CanFrame): DecodedSignal | null 
   };
 }
 
+function multiplexGroup(multiplex: string | undefined): number | null {
+  // 'M' is the multiplexor switch and 'undefined' is a plain signal; neither is
+  // tied to a specific group. 'm0', 'm12', ... identify multiplexed signals that
+  // are only present when the switch equals that number.
+  if (!multiplex || multiplex === 'M') {
+    return null;
+  }
+
+  const match = /^m(\d+)$/.exec(multiplex);
+  return match ? Number(match[1]) : null;
+}
+
 export function decodeFrameSignals(frame: CanFrame, message: DbcMessage): DecodedSignal[] {
+  const signals = Object.values(message.signals);
+
+  // If the message is multiplexed, decode the multiplexor switch first so we know
+  // which multiplexed group is actually present in this frame. Decoding every
+  // group unconditionally (the previous behavior) emitted garbage for whichever
+  // groups were not transmitted.
+  let activeGroup: number | null = null;
+  const multiplexor = signals.find((signal) => signal.multiplex === 'M');
+  if (multiplexor) {
+    const switchResult = decodeSignal(multiplexor, frame);
+    if (switchResult && Number.isFinite(switchResult.raw)) {
+      activeGroup = switchResult.raw;
+    }
+  }
+
   const decoded: DecodedSignal[] = [];
 
-  for (const signalName of Object.keys(message.signals)) {
-    const signal = message.signals[signalName];
+  for (const signal of signals) {
+    const group = multiplexGroup(signal.multiplex);
+    if (group !== null && group !== activeGroup) {
+      continue;
+    }
+
     const result = decodeSignal(signal, frame);
 
     if (!result) {

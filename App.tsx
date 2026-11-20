@@ -245,6 +245,8 @@ function AppShell() {
     startStreaming,
     stopStreaming,
     sendAtCommand,
+    exportLatestSession,
+    lastExportUri,
   } = useTelemetryController();
 
   const [locale, setLocale] = useState<LocaleCode>('en');
@@ -618,6 +620,21 @@ function AppShell() {
       setCommandOutput([`${t('commandErrorPrefix')}: ${localizedMessage}`]);
     } finally {
       setCommandBusy(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setActionBusy('export');
+    try {
+      const uri = await exportLatestSession();
+      if (!uri) {
+        Alert.alert(t('exportNoDataTitle'), t('exportNoData'));
+      }
+    } catch (exportError) {
+      const message = exportError instanceof Error ? exportError.message : String(exportError);
+      Alert.alert(t('exportNoDataTitle'), localizeTelemetryError(locale, message) ?? message);
+    } finally {
+      setActionBusy(null);
     }
   };
 
@@ -1014,6 +1031,30 @@ function AppShell() {
                     {actionBusy === 'adapter-scan' ? t('actionScanning') : t('actionScanAdapters')}
                   </Text>
                 </Pressable>
+                {status === 'connected' ? (
+                  <Pressable
+                    onPress={() => runAction('stream-start', startStreaming)}
+                    disabled={actionBusy !== null}
+                    style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+                  >
+                    <MaterialCommunityIcons name="play-circle-outline" size={14} color="#06251D" />
+                    <Text style={styles.primaryButtonText}>
+                      {actionBusy === 'stream-start' ? t('actionStarting') : t('actionStartStream')}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {status === 'streaming' ? (
+                  <Pressable
+                    onPress={() => runAction('stream-stop', stopStreaming)}
+                    disabled={actionBusy !== null}
+                    style={({ pressed }) => [styles.ghostButton, pressed && styles.buttonPressed]}
+                  >
+                    <MaterialCommunityIcons name="stop-circle-outline" size={14} color="#A7D6CA" />
+                    <Text style={styles.ghostButtonText}>
+                      {actionBusy === 'stream-stop' ? t('actionStopping') : t('actionStopStream')}
+                    </Text>
+                  </Pressable>
+                ) : null}
                 {isConnected ? (
                   <Pressable
                     onPress={() => runAction('adapter-disconnect', disconnect)}
@@ -1024,7 +1065,23 @@ function AppShell() {
                     <Text style={styles.ghostButtonText}>{t('actionDisconnect')}</Text>
                   </Pressable>
                 ) : null}
+                <Pressable
+                  onPress={handleExport}
+                  disabled={actionBusy !== null}
+                  style={({ pressed }) => [styles.ghostButton, pressed && styles.buttonPressed]}
+                >
+                  <MaterialCommunityIcons name="file-export-outline" size={14} color="#A7D6CA" />
+                  <Text style={styles.ghostButtonText}>
+                    {actionBusy === 'export' ? t('actionExporting') : t('actionExportCsv')}
+                  </Text>
+                </Pressable>
               </View>
+
+              {lastExportUri ? (
+                <Text style={styles.dimText} numberOfLines={1}>
+                  {t('lastExport', { uri: lastExportUri })}
+                </Text>
+              ) : null}
 
               {devices.length === 0 ? (
                 <Text style={styles.dimText}>{t('noAdapters')}</Text>

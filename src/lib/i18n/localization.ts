@@ -51,6 +51,8 @@ const EN: Dictionary = {
   actionExporting: 'Exporting...',
   actionExportCsv: 'Export CSV',
   lastExport: 'Last export {uri}',
+  exportNoDataTitle: 'Export',
+  exportNoData: 'Nothing to export yet. Start a stream first.',
 
   sectionPrimaryWidgets: 'Primary Widgets',
   sectionSecondaryMetrics: 'Secondary Metrics',
@@ -208,6 +210,8 @@ const RO: Dictionary = {
   actionExporting: 'Export...',
   actionExportCsv: 'Export CSV',
   lastExport: 'Ultimul export {uri}',
+  exportNoDataTitle: 'Export',
+  exportNoData: 'Nimic de exportat. Porneste un stream mai intai.',
 
   sectionPrimaryWidgets: 'Widgeturi principale',
   sectionSecondaryMetrics: 'Metrici secundare',
