@@ -24,7 +24,7 @@ const CELL_SIGNAL_PATTERNS = [
   /(?:Brick|Cell)(\d{1,3})$/i,
 ];
 
-const HV_ACCESSORY_PRIORITIES = [
+export const HV_ACCESSORY_PRIORITIES = [
   'BMS_isolationResistance',
   'BMS_hvState',
   'BattBrickVoltageMin332',
@@ -62,6 +62,10 @@ function getCellIndex(signalName: string): number | null {
   }
 
   return null;
+}
+
+export function isHvCellSignal(signalName: string): boolean {
+  return getCellIndex(signalName) !== null;
 }
 
 export function pickHvCellSignals(signals: SignalLike[]): HvCellSample[] {

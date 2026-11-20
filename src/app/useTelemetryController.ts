@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { VLinkerBleClient, type BleDeviceInfo } from '../lib/ble/VLinkerBleClient';
 import { Elm327Session } from '../lib/can/elm327Session';
+import { derivePollTargets } from '../lib/can/pollPlan';
 import { CanFrame, DecodedSignal } from '../lib/can/types';
 import { decodeCanFrame } from '../lib/dbc/decodeCanFrame';
 import { DbcDatabase } from '../lib/dbc/types';
@@ -57,6 +58,7 @@ export function useTelemetryController() {
   const [lastExportUri, setLastExportUri] = useState<string | null>(null);
   const [selectedVehicleProfileId, setSelectedVehicleProfileId] =
     useState<VehicleProfileId>(DEFAULT_VEHICLE_PROFILE_ID);
+  const [canFilterEnabled, setCanFilterEnabled] = useState(true);
 
   const selectedVehicleProfile = useMemo(
     () => getVehicleProfileById(selectedVehicleProfileId),
@@ -276,7 +278,7 @@ export function useTelemetryController() {
     const sessionId = await store.startSession();
     setActiveSessionId(sessionId);
 
-    await elm.startMonitoring((frame) => {
+    const onFrame = (frame: CanFrame) => {
       const processFrame = async () => {
         setFrameCount((current) => current + 1);
 
@@ -294,10 +296,20 @@ export function useTelemetryController() {
         setError(message);
         setStatus('error');
       });
-    });
+    };
+
+    // Filtered monitoring requests only the ids this profile decodes, so the
+    // adapter is not overwhelmed by the full bus. Raw monitor-all remains as an
+    // opt-out for debugging or unusual buses.
+    if (canFilterEnabled) {
+      const targets = derivePollTargets(dbc, selectedVehicleProfile);
+      await elm.startFilteredMonitoring(targets, onFrame);
+    } else {
+      await elm.startMonitoring(onFrame);
+    }
 
     setStatus('streaming');
-  }, [clearLiveSignalCache, handleDecodedSignals, pushFrameForUi]);
+  }, [canFilterEnabled, clearLiveSignalCache, handleDecodedSignals, pushFrameForUi, selectedVehicleProfile]);
 
   const setVehicleProfile = useCallback(
     async (profileId: VehicleProfileId): Promise<void> => {
@@ -433,6 +445,8 @@ export function useTelemetryController() {
     selectedVehicleProfileId,
     selectedVehicleProfileName: selectedVehicleProfile.name,
     selectedVehicleProfile,
+    canFilterEnabled,
+    setCanFilterEnabled,
     scanForAdapters,
     stopScan,
     connectToAdapter,

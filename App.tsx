@@ -245,6 +245,8 @@ function AppShell() {
     sendAtCommand,
     exportLatestSession,
     lastExportUri,
+    canFilterEnabled,
+    setCanFilterEnabled,
   } = useTelemetryController();
 
   const [locale, setLocale] = useState<LocaleCode>('en');
@@ -1299,6 +1301,39 @@ function AppShell() {
                       <Text style={styles.ghostButtonText}>{t('actionDisconnect')}</Text>
                     </Pressable>
                   ) : null}
+                </View>
+              </View>
+
+              <View style={styles.settingsBlock}>
+                <Text style={styles.settingsLabel}>{t('settingsCanFilter')}</Text>
+                <Text style={styles.settingsHint}>{t('settingsCanFilterHint')}</Text>
+                <View style={styles.localeRow}>
+                  <Pressable
+                    onPress={() => setCanFilterEnabled(true)}
+                    disabled={status === 'streaming'}
+                    style={({ pressed }) => [
+                      styles.localeChip,
+                      canFilterEnabled && styles.localeChipActive,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
+                    <Text style={canFilterEnabled ? styles.localeTextActive : styles.localeText}>
+                      {t('settingsCanFilterOn')}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setCanFilterEnabled(false)}
+                    disabled={status === 'streaming'}
+                    style={({ pressed }) => [
+                      styles.localeChip,
+                      !canFilterEnabled && styles.localeChipActive,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
+                    <Text style={!canFilterEnabled ? styles.localeTextActive : styles.localeText}>
+                      {t('settingsCanFilterOff')}
+                    </Text>
+                  </Pressable>
                 </View>
               </View>
             </View>

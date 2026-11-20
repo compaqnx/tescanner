@@ -83,6 +83,11 @@ const EN: Dictionary = {
   sectionAppSettings: 'App Settings',
   sectionLanguageSettings: 'Language',
   sectionConnectionSettings: 'Connection',
+  settingsCanFilter: 'CAN hardware filtering',
+  settingsCanFilterHint:
+    'Request only the signals this profile decodes so the adapter is not flooded by the whole bus. Turn off to monitor every frame (debug).',
+  settingsCanFilterOn: 'On',
+  settingsCanFilterOff: 'Off',
   profileModel3yName: 'Model 3 / Y',
   profileModel3yDesc: 'Model 3 and Model Y telemetry profile.',
   profileModelsxName: 'Model S / X (2015-2021)',
@@ -245,6 +250,11 @@ const RO: Dictionary = {
   sectionAppSettings: 'Setari aplicatie',
   sectionLanguageSettings: 'Limba',
   sectionConnectionSettings: 'Conexiune',
+  settingsCanFilter: 'Filtrare hardware CAN',
+  settingsCanFilterHint:
+    'Cere doar semnalele decodate de acest profil, ca adaptorul sa nu fie inundat de tot bus-ul. Dezactiveaza pentru a monitoriza fiecare cadru (debug).',
+  settingsCanFilterOn: 'Pornit',
+  settingsCanFilterOff: 'Oprit',
   profileModel3yName: 'Model 3 / Y',
   profileModel3yDesc: 'Profil telemetrie pentru Model 3 si Model Y.',
   profileModelsxName: 'Model S / X (2015-2021)',
