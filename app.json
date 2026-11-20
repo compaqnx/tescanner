@@ -11,7 +11,8 @@
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Tescanner uses Bluetooth to connect to your OBD adapter and read Tesla CAN telemetry.",
         "NSBluetoothPeripheralUsageDescription": "Tescanner uses Bluetooth to connect to your OBD adapter and read Tesla CAN telemetry."
-      }
+      },
+      "bundleIdentifier": "com.anonymous.Tescanner"
     },
     "android": {
       "adaptiveIcon": {
