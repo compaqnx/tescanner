@@ -1,4 +1,4 @@
-export type VehicleProfileId = 'model3y' | 'modelsx_2015_2021';
+export type VehicleProfileId = 'model3y' | 'modelsx_powertrain' | 'modelsx_2015_2021';
 
 export interface CanonicalSignalAlias {
   canonicalName: string;
@@ -143,6 +143,25 @@ const MODELSX_2015_2021_ALIASES: CanonicalSignalAlias[] = [
   },
 ];
 
+/**
+ * Legacy Model S/X powertrain bus (the bus the Scan My Tesla S/X harness taps):
+ * battery, cells, drive units, DC-DC and thermal from TeslaSx_powertrain_battery.dbc,
+ * plus drive basics from openDBC tesla_powertrain.dbc.
+ */
+const MODELSX_POWERTRAIN_ALIASES: CanonicalSignalAlias[] = [
+  { canonicalName: 'vehicleSpeed', label: 'Vehicle Speed', aliases: ['SX_vehicleSpeedKph'] },
+  { canonicalName: 'gear', label: 'Gear', aliases: ['DI_gear'] },
+  { canonicalName: 'batterySocUi', label: 'Battery SoC (UI)', aliases: ['SX_socUi'] },
+  { canonicalName: 'packVoltage', label: 'Pack Voltage', aliases: ['SX_packVoltage'] },
+  { canonicalName: 'packCurrent', label: 'Pack Current', aliases: ['SX_packCurrent'] },
+  { canonicalName: 'nominalFullPackEnergy', label: 'Nominal Full Pack', aliases: ['SX_nominalFullPackEnergy'] },
+  { canonicalName: 'minBrickVoltage', label: 'Min Brick Voltage', aliases: ['SX_brickVoltageMin'] },
+  { canonicalName: 'maxBrickVoltage', label: 'Max Brick Voltage', aliases: ['SX_brickVoltageMax'] },
+  { canonicalName: 'maxRegenPower', label: 'Max Regen Power', aliases: ['SX_maxRegenPower'] },
+  { canonicalName: 'outsideTemp', label: 'Outside Temp', aliases: ['SX_outsideTemp'] },
+  { canonicalName: 'driveTorque', label: 'Torque', aliases: ['SX_rearTorqueMeasured'] },
+];
+
 export const VEHICLE_PROFILES: VehicleProfileDefinition[] = [
   {
     id: 'model3y',
@@ -173,9 +192,31 @@ export const VEHICLE_PROFILES: VehicleProfileDefinition[] = [
     aliases: MODEL3Y_ALIASES,
   },
   {
+    id: 'modelsx_powertrain',
+    name: 'Model S / X – battery & powertrain',
+    description:
+      'Legacy Model S/X (2012-2021) powertrain bus: pack, 96 cells, drive units, DC-DC, thermal. Use with a Scan My Tesla-style S/X harness.',
+    dbcAssets: [
+      require('../../../assets/can/TeslaSx_powertrain_battery.dbc'),
+      require('../../../assets/can/TeslaSx_tesla_powertrain.dbc'),
+    ],
+    watchSignals: MODELSX_POWERTRAIN_ALIASES.map((entry) => entry.canonicalName),
+    dashboardPrimaryMetrics: ['vehicleSpeed', 'batterySocUi', 'packVoltage', 'packCurrent'],
+    dashboardSecondaryMetrics: [
+      'gear',
+      'nominalFullPackEnergy',
+      'minBrickVoltage',
+      'maxBrickVoltage',
+      'maxRegenPower',
+      'outsideTemp',
+      'driveTorque',
+    ],
+    aliases: MODELSX_POWERTRAIN_ALIASES,
+  },
+  {
     id: 'modelsx_2015_2021',
-    name: 'Model S / X (2015-2021)',
-    description: 'Legacy Model S and X telemetry using openDBC tesla_can + tesla_powertrain.',
+    name: 'Model S / X – chassis & driver assist',
+    description: 'Legacy Model S and X chassis bus using openDBC tesla_can + tesla_powertrain.',
     dbcAssets: [
       require('../../../assets/can/TeslaSx_tesla_can.dbc'),
       require('../../../assets/can/TeslaSx_tesla_powertrain.dbc'),

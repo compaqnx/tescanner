@@ -39,7 +39,7 @@ The connection bar (`ConnectionBar` in `src/ui/components.tsx`) sits under every
 ## EV systems → subsystems
 
 Defined in `src/lib/systems/systemCatalog.ts`. Each signal lists candidate DBC names (the
-first one present wins), so one catalog serves both the Model 3/Y and the S/X profiles.
+first one present wins), so one catalog serves the Model 3/Y profile and both S/X profiles (see `docs/research/model-sx-can.md`).
 
 | # | System | Subsystems |
 | --- | --- | --- |

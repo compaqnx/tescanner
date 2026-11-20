@@ -87,6 +87,8 @@ From `TeslaSx_tesla_can.dbc` and `TeslaSx_tesla_powertrain.dbc`, key decoded fie
 
 Note: the openDBC S/X files above are strong for drivetrain/speed/UI status signals, but do not expose the same rich battery metric namespace (`BMS_*`) found in the Model 3/Y DBC snapshot. The app now supports profile-based alias mapping so additional S/X battery signals can be plugged in as soon as validated DBC/decoded mappings are sourced.
 
+Update: battery, cell and powertrain coverage for legacy S/X now comes from the project-authored `assets/can/TeslaSx_powertrain_battery.dbc` (profile `modelsx_powertrain`). Sources, licensing and fields to verify are in `docs/research/model-sx-can.md`.
+
 ## Decoupled CAN data architecture
 
 The app now keeps vehicle-specific CAN concerns in profile metadata instead of screen code:

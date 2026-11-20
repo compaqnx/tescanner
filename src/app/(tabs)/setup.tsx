@@ -12,6 +12,7 @@ import { colors, fonts, radius, spacing, TOUCH_TARGET } from '../../ui/theme';
 
 const PROFILE_KEYS: Record<string, { name: TranslationKey; desc: TranslationKey }> = {
   model3y: { name: 'profileModel3yName', desc: 'profileModel3yDesc' },
+  modelsx_powertrain: { name: 'profileModelsxPtName', desc: 'profileModelsxPtDesc' },
   modelsx_2015_2021: { name: 'profileModelsxName', desc: 'profileModelsxDesc' },
 };
 

@@ -23,7 +23,7 @@ export function detectTeslaModel(
   signalIndex: SignalIndex,
 ): DetectedTeslaModel {
   if (!connected) {
-    return selectedProfileId === 'modelsx_2015_2021'
+    return selectedProfileId.startsWith('modelsx')
       ? { key: 'models', nameKey: 'modelNameModelSx', source: 'profile' }
       : { key: 'model3', nameKey: 'modelNameModel3y', source: 'profile' };
   }
@@ -42,7 +42,7 @@ export function detectTeslaModel(
     return { key: 'model3', nameKey: 'modelNameModel3', source: 'device-name' };
   }
 
-  if (selectedProfileId === 'modelsx_2015_2021') {
+  if (selectedProfileId.startsWith('modelsx')) {
     const wheelSignal = signalIndex.get('DI_tireTypeConfig');
     if (wheelSignal && wheelSignal.value > 1) {
       return { key: 'modelx', nameKey: 'modelNameModelX', source: 'signal' };

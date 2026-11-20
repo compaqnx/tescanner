@@ -1,0 +1,251 @@
+VERSION ""
+
+NS_ :
+
+BS_:
+
+BU_: BMS DI DIF DCDC THC GTW
+
+CM_ "Tescanner Model S/X (2012-2021, pre-Palladium) powertrain-bus database. Written for this project from publicly documented bit layouts (Scan My Tesla / CANBUS-Analyzer packet decoders, Battery-Emulator legacy BMS notes, cross-checked against the Model 3 DBC where IDs are shared). Signal names are project-specific (SX_ prefix). Fields marked VERIFY need confirmation on a real car.";
+
+BO_ 258 BMS_hvBusStatus: 8 BMS
+ SG_ SX_packVoltage : 0|16@1+ (0.01,0) [0|500] "V" Vector__XXX
+ SG_ SX_packCurrent : 16|15@1- (-0.1,1000) [-2000|2000] "A" Vector__XXX
+
+BO_ 278 DI_torque2: 6 DI
+ SG_ SX_vehicleSpeedKph : 16|12@1+ (0.0804672,-40.2336) [-40|290] "km/h" Vector__XXX
+
+BO_ 340 RDI_torque: 8 DI
+ SG_ SX_wattPedal : 24|8@1+ (0.4,0) [0|100] "%" Vector__XXX
+ SG_ SX_rearTorqueMeasured : 40|13@1- (0.25,0) [-1000|1000] "Nm" Vector__XXX
+
+BO_ 468 FDI_torque: 8 DIF
+ SG_ SX_frontTorqueMeasured : 40|13@1- (0.25,0) [-1000|1000] "Nm" Vector__XXX
+
+BO_ 528 DCDC_status: 8 DCDC
+ SG_ SX_dcdcCoolantInlet : 16|8@1- (0.5,40) [-24|103] "C" Vector__XXX
+ SG_ SX_dcdcInputPower : 24|8@1+ (16,0) [0|4080] "W" Vector__XXX
+ SG_ SX_dcdcOutputCurrent : 32|8@1+ (1,0) [0|255] "A" Vector__XXX
+ SG_ SX_dcdcOutputVoltage : 40|8@1+ (0.1,0) [0|25.5] "V" Vector__XXX
+
+BO_ 530 BMS_status: 8 BMS
+ SG_ SX_hvilStatus : 6|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ SX_contactorState : 16|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ SX_bmsState : 20|4@1+ (1,0) [0|15] "" Vector__XXX
+
+BO_ 562 BMS_powerLimits: 8 BMS
+ SG_ SX_maxRegenPower : 0|16@1+ (0.01,0) [0|655] "kW" Vector__XXX
+ SG_ SX_maxDischargePower : 16|16@1+ (0.01,0) [0|655] "kW" Vector__XXX
+
+BO_ 614 RDI_power: 8 DI
+ SG_ SX_rearInverter12V : 0|8@1+ (0.1,0) [0|25.5] "V" Vector__XXX
+ SG_ SX_rearDissipation : 8|8@1+ (0.125,0) [0|32] "kW" Vector__XXX
+ SG_ SX_rearMechPower : 16|11@1- (0.5,0) [-512|511] "kW" Vector__XXX
+ SG_ SX_rearStatorCurrent : 32|11@1+ (1,0) [0|2047] "A" Vector__XXX
+ SG_ SX_rearDrivePowerMax : 44|10@1+ (2,1) [1|2047] "kW" Vector__XXX
+ SG_ SX_rearRegenPowerMax : 56|8@1+ (4,-200) [-200|820] "kW" Vector__XXX
+
+BO_ 618 THC_batteryHeater: 8 THC
+ SG_ SX_batteryHeaterTemp : 0|11@1+ (0.125,-40) [-40|215] "C" Vector__XXX
+ SG_ SX_batteryHeaterReq : 11|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ SX_batteryHeaterState : 20|3@1+ (1,0) [0|7] "" Vector__XXX
+
+BO_ 741 FDI_power: 8 DIF
+ SG_ SX_frontDissipation : 8|8@1+ (0.125,0) [0|32] "kW" Vector__XXX
+ SG_ SX_frontMechPower : 16|11@1- (0.5,0) [-512|511] "kW" Vector__XXX
+ SG_ SX_frontStatorCurrent : 32|11@1+ (1,0) [0|2047] "A" Vector__XXX
+ SG_ SX_frontDrivePowerMax : 44|10@1+ (2,1) [1|2047] "kW" Vector__XXX
+
+BO_ 770 BMS_socStatus: 8 BMS
+ SG_ SX_socMin : 0|10@1+ (0.1,0) [0|102.3] "%" Vector__XXX
+ SG_ SX_socUi : 10|10@1+ (0.1,0) [0|102.3] "%" Vector__XXX
+ SG_ SX_chargeTotalSelect M : 20|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ SX_dcChargeTotal m0 : 32|32@1+ (0.001,0) [0|4294967] "kWh" Vector__XXX
+ SG_ SX_acChargeTotal m1 : 32|32@1+ (0.001,0) [0|4294967] "kWh" Vector__XXX
+
+BO_ 774 RDI_temps: 8 DI
+ SG_ SX_rearInverterPcbTemp : 0|8@1+ (1,-40) [-40|215] "C" Vector__XXX
+ SG_ SX_rearInverterTemp : 8|8@1+ (1,-40) [-40|215] "C" Vector__XXX
+ SG_ SX_rearStatorTemp : 16|8@1+ (1,-40) [-40|215] "C" Vector__XXX
+ SG_ SX_rearDcCapTemp : 24|8@1+ (1,-40) [-40|215] "C" Vector__XXX
+ SG_ SX_rearHeatsinkTemp : 32|8@1+ (1,-40) [-40|215] "C" Vector__XXX
+ SG_ SX_rearCoolantInletTemp : 40|8@1+ (1,-40) [-40|215] "C" Vector__XXX
+ SG_ SX_rearInverterTempPct : 48|8@1+ (0.4,0) [0|102] "%" Vector__XXX
+ SG_ SX_rearStatorTempPct : 56|8@1+ (0.4,0) [0|102] "%" Vector__XXX
+
+BO_ 792 THC_cabinTemps: 8 THC
+ SG_ SX_outsideTemp : 0|8@1+ (0.5,-40) [-40|87.5] "C" Vector__XXX
+ SG_ SX_outsideTempFiltered : 8|8@1+ (0.5,-40) [-40|87.5] "C" Vector__XXX
+ SG_ SX_insideTemp : 16|8@1+ (0.5,-40) [-40|87.5] "C" Vector__XXX
+ SG_ SX_acAirTemp : 32|8@1+ (0.5,-40) [-40|87.5] "C" Vector__XXX
+
+BO_ 794 THC_coolantTemps: 8 THC
+ SG_ SX_batteryInletTemp : 0|10@1+ (0.125,-40) [-40|87.8] "C" Vector__XXX
+ SG_ SX_ptInletTemp : 32|10@1+ (0.125,-40) [-40|87.8] "C" Vector__XXX
+
+BO_ 810 THC_pumps: 8 THC
+ SG_ SX_batteryPump1 : 0|7@1+ (1,0) [0|100] "%" Vector__XXX
+ SG_ SX_batteryPump2 : 8|8@1+ (1,0) [0|100] "%" Vector__XXX
+ SG_ SX_ptPump : 16|8@1+ (1,0) [0|100] "%" Vector__XXX
+ SG_ SX_ptPump2 : 56|8@1+ (1,0) [0|100] "%" Vector__XXX
+
+BO_ 818 BMS_brickMinMax: 8 BMS
+ SG_ SX_brickVoltageMax : 0|12@1+ (0.002,0) [0|8.19] "V" Vector__XXX
+ SG_ SX_moduleTempMax : 24|8@1+ (0.5,-40) [-40|87.5] "C" Vector__XXX
+ SG_ SX_brickVoltageMin : 32|12@1+ (0.002,0) [0|8.19] "V" Vector__XXX
+ SG_ SX_moduleTempMin : 56|8@1+ (0.5,-40) [-40|87.5] "C" Vector__XXX
+
+BO_ 824 UI_range: 8 GTW
+ SG_ SX_ratedRange : 0|16@1+ (1.609344,0) [0|105000] "km" Vector__XXX
+ SG_ SX_typicalRange : 16|16@1+ (1.609344,0) [0|105000] "km" Vector__XXX
+
+BO_ 898 BMS_energyStatus: 8 BMS
+ SG_ SX_nominalFullPackEnergy : 0|10@1+ (0.1,0) [0|102.3] "kWh" Vector__XXX
+ SG_ SX_nominalEnergyRemaining : 10|10@1+ (0.1,0) [0|102.3] "kWh" Vector__XXX
+ SG_ SX_expectedEnergyRemaining : 20|10@1+ (0.1,0) [0|102.3] "kWh" Vector__XXX
+ SG_ SX_idealEnergyRemaining : 30|10@1+ (0.1,0) [0|102.3] "kWh" Vector__XXX
+ SG_ SX_energyToChargeComplete : 40|10@1+ (0.1,0) [0|102.3] "kWh" Vector__XXX
+ SG_ SX_energyBuffer : 50|8@1+ (0.1,0) [0|25.5] "kWh" Vector__XXX
+
+BO_ 978 BMS_kwhCounters: 8 BMS
+ SG_ SX_totalDischarge : 0|32@1+ (0.001,0) [0|4294967] "kWh" Vector__XXX
+ SG_ SX_totalCharge : 32|32@1+ (0.001,0) [0|4294967] "kWh" Vector__XXX
+
+BO_ 1378 BMS_odometer: 8 BMS
+ SG_ SX_batteryOdometer : 0|32@1+ (0.001609344,0) [0|6900000] "km" Vector__XXX
+
+BO_ 1778 BMS_brickData: 8 BMS
+ SG_ SX_brickMux M : 0|8@1+ (1,0) [0|31] "" Vector__XXX
+ SG_ Brick0 m0 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick1 m0 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick2 m0 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick3 m0 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick4 m1 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick5 m1 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick6 m1 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick7 m1 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick8 m2 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick9 m2 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick10 m2 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick11 m2 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick12 m3 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick13 m3 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick14 m3 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick15 m3 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick16 m4 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick17 m4 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick18 m4 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick19 m4 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick20 m5 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick21 m5 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick22 m5 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick23 m5 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick24 m6 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick25 m6 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick26 m6 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick27 m6 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick28 m7 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick29 m7 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick30 m7 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick31 m7 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick32 m8 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick33 m8 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick34 m8 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick35 m8 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick36 m9 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick37 m9 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick38 m9 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick39 m9 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick40 m10 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick41 m10 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick42 m10 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick43 m10 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick44 m11 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick45 m11 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick46 m11 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick47 m11 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick48 m12 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick49 m12 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick50 m12 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick51 m12 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick52 m13 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick53 m13 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick54 m13 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick55 m13 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick56 m14 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick57 m14 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick58 m14 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick59 m14 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick60 m15 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick61 m15 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick62 m15 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick63 m15 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick64 m16 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick65 m16 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick66 m16 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick67 m16 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick68 m17 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick69 m17 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick70 m17 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick71 m17 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick72 m18 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick73 m18 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick74 m18 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick75 m18 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick76 m19 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick77 m19 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick78 m19 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick79 m19 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick80 m20 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick81 m20 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick82 m20 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick83 m20 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick84 m21 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick85 m21 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick86 m21 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick87 m21 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick88 m22 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick89 m22 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick90 m22 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick91 m22 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick92 m23 : 8|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick93 m23 : 22|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick94 m23 : 36|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ Brick95 m23 : 50|14@1+ (0.000305,0) [0|5] "V" Vector__XXX
+ SG_ SX_moduleTemp1 m24 : 8|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp2 m24 : 22|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp3 m24 : 36|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp4 m24 : 50|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp5 m25 : 8|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp6 m25 : 22|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp7 m25 : 36|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp8 m25 : 50|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp9 m26 : 8|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp10 m26 : 22|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp11 m26 : 36|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp12 m26 : 50|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp13 m27 : 8|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp14 m27 : 22|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp15 m27 : 36|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp16 m27 : 50|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp17 m28 : 8|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp18 m28 : 22|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp19 m28 : 36|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp20 m28 : 50|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp21 m29 : 8|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp22 m29 : 22|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp23 m29 : 36|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp24 m29 : 50|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp25 m30 : 8|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp26 m30 : 22|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp27 m30 : 36|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp28 m30 : 50|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp29 m31 : 8|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp30 m31 : 22|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp31 m31 : 36|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+ SG_ SX_moduleTemp32 m31 : 50|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
+
+CM_ SG_ 258 SX_packCurrent "Positive = discharge. VERIFY: sources disagree (offset 1000 A, 15-bit) vs (signed 16-bit, no offset).";
+CM_ SG_ 978 SX_totalDischarge "Order matches Model 3 ID3D2 and Battery-Emulator; Scan My Tesla labels bytes 0-3 as charge. VERIFY.";
+CM_ SG_ 770 SX_socMin "VERIFY: some sources label bits 0-9 as UI SoC.";
+CM_ SG_ 1778 SX_brickMux "0-23: four brick voltages each (96 bricks); 24-31: four module temperatures each (32 sensors).";
