@@ -122,11 +122,13 @@ const EN: Dictionary = {
   modelNameModelS: 'Tesla Model S',
   modelNameModelX: 'Tesla Model X',
   modelNameModelSx: 'Tesla Model S / X',
+  modelNameModel3y: 'Tesla Model 3 / Y',
 
   sectionManualCommands: 'Manual Adapter Commands',
   commandPlaceholder: 'ATI, ATRV, 0100',
   actionSend: 'Send',
   commandRequiresAdapter: 'Connect an adapter before sending commands.',
+  commandBlockedWhileStreaming: 'Stop the live stream before sending commands.',
   commandEmptyResponse: '<empty response>',
   commandErrorPrefix: 'ERROR',
 
@@ -157,6 +159,7 @@ const EN: Dictionary = {
   errSystemNotReady: 'System not ready for streaming yet.',
   errSwitchProfileIdle: 'Switch vehicle profile while idle. Disconnect and stop streaming first.',
   errAdapterNotConnected: 'Adapter is not connected.',
+  errCommandWhileStreaming: 'Stop the live stream before sending commands.',
 
   genericUnknown: 'Unknown',
 };
@@ -281,11 +284,13 @@ const RO: Dictionary = {
   modelNameModelS: 'Tesla Model S',
   modelNameModelX: 'Tesla Model X',
   modelNameModelSx: 'Tesla Model S / X',
+  modelNameModel3y: 'Tesla Model 3 / Y',
 
   sectionManualCommands: 'Comenzi manuale adaptor',
   commandPlaceholder: 'ATI, ATRV, 0100',
   actionSend: 'Trimite',
   commandRequiresAdapter: 'Conecteaza un adaptor inainte de comenzi.',
+  commandBlockedWhileStreaming: 'Opreste stream-ul live inainte de a trimite comenzi.',
   commandEmptyResponse: '<raspuns gol>',
   commandErrorPrefix: 'EROARE',
 
@@ -316,6 +321,7 @@ const RO: Dictionary = {
   errSystemNotReady: 'Sistemul nu este pregatit pentru streaming.',
   errSwitchProfileIdle: 'Schimba profilul doar in stare inactiva. Deconecteaza si opreste stream-ul.',
   errAdapterNotConnected: 'Adaptorul nu este conectat.',
+  errCommandWhileStreaming: 'Opreste stream-ul live inainte de a trimite comenzi.',
 
   genericUnknown: 'Necunoscut',
 };
@@ -357,6 +363,8 @@ export function localizeTelemetryError(locale: LocaleCode, rawError: string | nu
       return translate(locale, 'errSwitchProfileIdle');
     case 'Adapter is not connected.':
       return translate(locale, 'errAdapterNotConnected');
+    case 'Stop the live stream before sending commands.':
+      return translate(locale, 'errCommandWhileStreaming');
     default:
       return rawError;
   }

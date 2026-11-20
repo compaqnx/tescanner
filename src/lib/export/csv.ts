@@ -29,12 +29,40 @@ export async function exportSessionAsCsv(store: SessionStore, sessionId: string)
     return null;
   }
 
-  const lines: string[] = [];
+  const exportDirectory = new Directory(Paths.document, 'exports');
+  exportDirectory.create({ idempotent: true, intermediates: true });
 
-  lines.push('SECTION,FRAME_LOG');
-  lines.push('session_id,timestamp_iso,timestamp_ms,can_id_hex,payload_hex,raw_line');
+  const filename = `tescanner-${sessionId}.csv`;
+  const file = new File(exportDirectory, filename);
+  file.create({ overwrite: true, intermediates: true });
+
+  // Stream rows to disk in batches so a long session does not build one giant
+  // string in memory before writing.
+  const CHUNK_ROWS = 1_000;
+  let buffer: string[] = [];
+  let wroteAnything = false;
+
+  const flushBuffer = async () => {
+    if (buffer.length === 0) {
+      return;
+    }
+    const text = (wroteAnything ? '\n' : '') + buffer.join('\n');
+    await file.write(text, { append: true });
+    buffer = [];
+    wroteAnything = true;
+  };
+
+  const writeRow = async (row: string) => {
+    buffer.push(row);
+    if (buffer.length >= CHUNK_ROWS) {
+      await flushBuffer();
+    }
+  };
+
+  await writeRow('SECTION,FRAME_LOG');
+  await writeRow('session_id,timestamp_iso,timestamp_ms,can_id_hex,payload_hex,raw_line');
   for (const frame of frames) {
-    lines.push(
+    await writeRow(
       [
         frame.sessionId,
         iso(frame.timestamp),
@@ -48,14 +76,13 @@ export async function exportSessionAsCsv(store: SessionStore, sessionId: string)
     );
   }
 
-  lines.push('');
-  lines.push('SECTION,SIGNAL_LOG');
-  lines.push(
+  await writeRow('');
+  await writeRow('SECTION,SIGNAL_LOG');
+  await writeRow(
     'session_id,timestamp_iso,timestamp_ms,message_name,message_id_hex,signal_key,signal_name,value,unit,display_value,raw_value',
   );
-
   for (const signal of signals) {
-    lines.push(
+    await writeRow(
       [
         signal.sessionId,
         iso(signal.timestamp),
@@ -74,13 +101,7 @@ export async function exportSessionAsCsv(store: SessionStore, sessionId: string)
     );
   }
 
-  const exportDirectory = new Directory(Paths.document, 'exports');
-  exportDirectory.create({ idempotent: true, intermediates: true });
-
-  const filename = `tescanner-${sessionId}.csv`;
-  const file = new File(exportDirectory, filename);
-  file.create({ overwrite: true, intermediates: true });
-  await file.write(lines.join('\n'));
+  await flushBuffer();
 
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(file.uri, {

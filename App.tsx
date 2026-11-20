@@ -192,12 +192,10 @@ function detectTeslaModel(
   }
 
   if (selectedProfileId === 'model3y') {
-    const packEnergy = signalIndex.get('nominalFullPackEnergy')?.value;
-    if (typeof packEnergy === 'number' && Number.isFinite(packEnergy) && packEnergy >= 74) {
-      return { key: 'modely', nameKey: 'modelNameModelY', source: 'signal' };
-    }
-
-    return { key: 'model3', nameKey: 'modelNameModel3', source: 'profile' };
+    // Pack energy cannot reliably tell a Model 3 Long Range (~75-82 kWh) from a
+    // Model Y, so this profile shows a combined label unless the adapter's device
+    // name (handled above) reveals the specific model.
+    return { key: 'model3', nameKey: 'modelNameModel3y', source: 'profile' };
   }
 
   return {
@@ -264,6 +262,7 @@ function AppShell() {
   const drawerTranslateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const drawerBackdropOpacity = useRef(new Animated.Value(0)).current;
   const previousErrorRef = useRef<string | null>(null);
+  const errorSeqRef = useRef(0);
 
   const t = useCallback(
     (key: TranslationKey, params?: Record<string, string | number>) => translate(locale, key, params),
@@ -463,7 +462,8 @@ function AppShell() {
     if (localizedError) {
       if (previousErrorRef.current !== localizedError) {
         const now = Date.now();
-        setStoredErrors((current) => [{ id: now, message: localizedError, createdAt: now }, ...current].slice(0, 80));
+        const id = (errorSeqRef.current += 1);
+        setStoredErrors((current) => [{ id, message: localizedError, createdAt: now }, ...current].slice(0, 80));
       }
       previousErrorRef.current = localizedError;
       return;
@@ -1136,7 +1136,7 @@ function AppShell() {
                   />
                   <Pressable
                     onPress={handleCommand}
-                    disabled={commandBusy || !isConnected}
+                    disabled={commandBusy || !isConnected || status === 'streaming'}
                     style={({ pressed }) => [styles.connectButton, pressed && styles.buttonPressed]}
                   >
                     {commandBusy ? (
@@ -1148,6 +1148,9 @@ function AppShell() {
                 </View>
 
                 {!isConnected ? <Text style={styles.dimText}>{t('commandRequiresAdapter')}</Text> : null}
+                {status === 'streaming' ? (
+                  <Text style={styles.dimText}>{t('commandBlockedWhileStreaming')}</Text>
+                ) : null}
 
                 {commandOutput.length > 0 ? (
                   <View style={styles.commandOutputCard}>

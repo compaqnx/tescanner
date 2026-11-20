@@ -34,6 +34,12 @@ export class Elm327Session {
   }
 
   async sendCommand(command: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string[]> {
+    // Writing anything to the adapter while ATMA is running silently stops the
+    // live stream, so refuse commands until monitoring is stopped.
+    if (this.monitorActive) {
+      throw new Error('Stop the live stream before sending commands.');
+    }
+
     if (this.pendingCommand) {
       throw new Error('A command is already in progress.');
     }

@@ -1,14 +1,6 @@
 import { CanFrame, DecodedSignal } from '../can/types';
 import { DbcDatabase, DbcMessage, DbcSignal } from './types';
 
-function toBigIntBuffer(data: Uint8Array): bigint {
-  let result = 0n;
-  for (const value of data) {
-    result = (result << 8n) | BigInt(value);
-  }
-  return result;
-}
-
 function extractLittleEndianRaw(data: Uint8Array, startBit: number, bitLength: number): bigint {
   let value = 0n;
 
@@ -25,30 +17,52 @@ function extractLittleEndianRaw(data: Uint8Array, startBit: number, bitLength: n
   return value;
 }
 
+// Motorola / big-endian (@0) extraction. The DBC `startBit` is the sawtooth bit
+// number of the signal's MSB: bit n lives in byte n>>3 at intra-byte position
+// n&7 (0 = LSB). Bits are read MSB-first, decrementing within a byte and jumping
+// to the next byte's MSB at each byte boundary.
 function extractBigEndianRaw(data: Uint8Array, startBit: number, bitLength: number): bigint {
-  const totalBits = data.length * 8;
-  const bigBuffer = toBigIntBuffer(data);
-
   let value = 0n;
-  let currentBit = startBit;
+  let bit = startBit;
 
   for (let i = 0; i < bitLength; i += 1) {
-    const absoluteMsbIndex = totalBits - 1 - currentBit;
-    if (absoluteMsbIndex < 0) {
-      break;
-    }
+    const byteIndex = bit >> 3;
+    const bitInByte = bit & 7;
+    const byteValue = data[byteIndex] ?? 0;
 
-    const bit = (bigBuffer >> BigInt(absoluteMsbIndex)) & 1n;
-    value = (value << 1n) | bit;
+    value = (value << 1n) | BigInt((byteValue >> bitInByte) & 0x01);
 
-    if ((currentBit & 7) === 0) {
-      currentBit += 15;
+    if (bitInByte === 0) {
+      bit += 15;
     } else {
-      currentBit -= 1;
+      bit -= 1;
     }
   }
 
   return value;
+}
+
+// Highest byte index a signal reads, so frames too short for it can be skipped
+// instead of silently decoding zero-padded bytes into misleading values.
+function highestByteIndex(signal: DbcSignal): number {
+  if (signal.byteOrder === 1) {
+    return (signal.startBit + signal.bitLength - 1) >> 3;
+  }
+
+  let bit = signal.startBit;
+  let maxByte = bit >> 3;
+  for (let i = 0; i < signal.bitLength; i += 1) {
+    const byteIndex = bit >> 3;
+    if (byteIndex > maxByte) {
+      maxByte = byteIndex;
+    }
+    if ((bit & 7) === 0) {
+      bit += 15;
+    } else {
+      bit -= 1;
+    }
+  }
+  return maxByte;
 }
 
 function toSignedValue(raw: bigint, bitLength: number): bigint {
@@ -87,6 +101,12 @@ function formatValue(value: number, unit: string, enumLabel?: string): string {
 function decodeSignal(signal: DbcSignal, frame: CanFrame): DecodedSignal | null {
   const bitLength = signal.bitLength;
   if (bitLength <= 0 || bitLength > 64) {
+    return null;
+  }
+
+  // Reject signals that run past the bytes actually received (short/truncated
+  // frames), rather than decoding zero-padded bytes into misleading values.
+  if (highestByteIndex(signal) >= frame.data.length) {
     return null;
   }
 
