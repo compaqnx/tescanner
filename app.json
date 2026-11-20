@@ -3,12 +3,24 @@
     "name": "Tescanner",
     "slug": "Tescanner",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
         "NSBluetoothAlwaysUsageDescription": "Tescanner uses Bluetooth to connect to your OBD adapter and read Tesla CAN telemetry.",
         "NSBluetoothPeripheralUsageDescription": "Tescanner uses Bluetooth to connect to your OBD adapter and read Tesla CAN telemetry."
       },

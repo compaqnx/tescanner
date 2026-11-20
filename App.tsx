@@ -16,6 +16,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SignalTile, TelemetryStatus, useTelemetryController } from './src/app/useTelemetryController';
@@ -212,6 +213,19 @@ function formatErrorTimestamp(value: number): string {
 
 function AppShell() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
+  const metricColumns = isLandscape ? (windowWidth >= 760 ? 4 : 3) : 2;
+  const contentWidth = windowWidth - 24;
+  const metricGap = 8;
+  const metricCardWidth =
+    (contentWidth - metricGap * (metricColumns - 1)) / metricColumns;
+  const hvColumns = isLandscape ? (windowWidth >= 760 ? 4 : 3) : 2;
+  const hvCellWidth =
+    (contentWidth - metricGap * (hvColumns - 1)) / hvColumns;
+  const profileColumns = isLandscape ? (windowWidth >= 760 ? 4 : 3) : 2;
+  const profileCardWidth =
+    (contentWidth - metricGap * (profileColumns - 1) - 24) / profileColumns;
 
   const {
     status,
@@ -645,7 +659,12 @@ function AppShell() {
       </View>
 
       <View style={styles.bodyWrap} {...panResponder.panHandlers}>
-        <ScrollView contentContainerStyle={styles.screenBody}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.screenBody,
+            isLandscape && styles.screenBodyLandscape,
+          ]}
+        >
           {activeScreenId === 'dashboard' ? (
             <>
               <View style={styles.heroCard}>
@@ -662,8 +681,17 @@ function AppShell() {
                   </View>
                 </View>
 
-                <View style={styles.heroImageCard}>
-                  <Image source={TESLA_MODEL_IMAGES[modelDetected.key]} style={styles.heroImage} resizeMode="contain" />
+                <View
+                  style={[
+                    styles.heroImageCard,
+                    isLandscape && styles.heroImageCardLandscape,
+                  ]}
+                >
+                  <Image
+                    source={TESLA_MODEL_IMAGES[modelDetected.key]}
+                    style={[styles.heroImage, isLandscape && styles.heroImageLandscape]}
+                    resizeMode="contain"
+                  />
                 </View>
 
                 <View style={styles.quickActionsRow}>
@@ -697,6 +725,7 @@ function AppShell() {
                     key={widget.key}
                     style={[
                       styles.metricCard,
+                      { width: metricCardWidth },
                       widget.accent === 'neon' && styles.metricCardAccent,
                       widget.accent === 'danger' && styles.metricCardDanger,
                     ]}
@@ -811,7 +840,14 @@ function AppShell() {
                         {hvPageCells.map((cell) => {
                           const isOutlier = hvMin !== null && cell.value <= hvMin + 0.01;
                           return (
-                            <View key={cell.key} style={[styles.hvCellTile, isOutlier && styles.hvCellTileWarning]}>
+                            <View
+                              key={cell.key}
+                              style={[
+                                styles.hvCellTile,
+                                { width: hvCellWidth },
+                                isOutlier && styles.hvCellTileWarning,
+                              ]}
+                            >
                               <Text style={styles.hvCellValue}>{toFixedMaybe(cell.value, 3)}</Text>
                               <Text style={styles.hvCellName}>{t('hvCellLabel', { index: cell.index + 1 })}</Text>
                             </View>
@@ -1162,6 +1198,7 @@ function AppShell() {
                         disabled={actionBusy !== null || status === 'streaming' || status === 'connected'}
                         style={({ pressed }) => [
                           styles.profileCard,
+                          { width: profileCardWidth },
                           selected && styles.profileCardActive,
                           pressed && styles.buttonPressed,
                         ]}
@@ -1219,6 +1256,7 @@ function AppShell() {
             style={[
               styles.drawerPanel,
               {
+                width: Math.min(DRAWER_WIDTH, windowWidth * 0.78),
                 paddingTop: drawerTopPadding,
                 transform: [{ translateX: drawerTranslateX }],
               },
@@ -1382,6 +1420,9 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
     gap: 10,
   },
+  screenBodyLandscape: {
+    paddingHorizontal: 16,
+  },
   heroCard: {
     borderRadius: 24,
     borderWidth: 1,
@@ -1434,9 +1475,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
+  heroImageCardLandscape: {
+    minHeight: 150,
+  },
   heroImage: {
     width: '100%',
     height: 164,
+  },
+  heroImageLandscape: {
+    height: 138,
   },
   quickActionsRow: {
     flexDirection: 'row',
@@ -1794,7 +1841,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   profileCard: {
-    flexBasis: '48%',
+    flexBasis: 0,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#355A53',
