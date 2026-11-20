@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { VLinkerBleClient, type BleDeviceInfo } from '../lib/ble/VLinkerBleClient';
 import { Elm327Session } from '../lib/can/elm327Session';
-import { describePollTargets, PollTarget, PollTargetInfo, toPollTargets } from '../lib/can/pollPlan';
+import { describePollTargets, PollTarget, PollTargetInfo, pollTargetServes, toPollTargets } from '../lib/can/pollPlan';
+import { buildSystemSignalIndex, type SystemId } from '../lib/systems/systemCatalog';
+import type { SessionSummary } from '../lib/export/sessionStore';
 import { CanFrame, DecodedSignal } from '../lib/can/types';
 import { decodeCanFrame } from '../lib/dbc/decodeCanFrame';
 import { DbcDatabase } from '../lib/dbc/types';
@@ -32,6 +34,19 @@ export interface SignalTile extends DecodedSignal {
 }
 
 const UI_FLUSH_INTERVAL_MS = 250;
+const LIVE_SIGNAL_CAP = 420;
+
+// Signals used by the EV system screens are kept even when the live cache is full.
+const SYSTEM_SIGNAL_INDEX = buildSystemSignalIndex();
+
+/**
+ * Default selection: the lightweight core + HV set. Extra system-only messages
+ * stay off until the user streams a specific system, so the adapter's refresh
+ * cycle stays short (the Scan My Tesla "pick what to log" trade-off).
+ */
+function defaultDisabledPollIds(catalog: PollTargetInfo[]): Set<number> {
+  return new Set(catalog.filter((info) => info.category === 'system').map((info) => info.id));
+}
 
 export function useTelemetryController() {
   const bleRef = useRef<VLinkerBleClient | null>(null);
@@ -61,6 +76,8 @@ export function useTelemetryController() {
   const [canFilterEnabled, setCanFilterEnabled] = useState(true);
   const [pollCatalog, setPollCatalog] = useState<PollTargetInfo[]>([]);
   const [disabledPollIds, setDisabledPollIds] = useState<Set<number>>(new Set());
+  const [recentSessions, setRecentSessions] = useState<SessionSummary[]>([]);
+  const [streamStartedAt, setStreamStartedAt] = useState<number | null>(null);
 
   const selectedVehicleProfile = useMemo(
     () => getVehicleProfileById(selectedVehicleProfileId),
@@ -143,9 +160,11 @@ export function useTelemetryController() {
         const canonicalName = resolution?.canonicalName ?? signal.signalName;
         const signalKey = resolution ? `canonical.${canonicalName}` : signal.key;
         const watched = watchedSignals.has(canonicalName);
+        const pinned =
+          watched || SYSTEM_SIGNAL_INDEX.has(canonicalName) || SYSTEM_SIGNAL_INDEX.has(signal.signalName);
         const knownCount = latestMapRef.current.size;
 
-        if (!watched && !latestMapRef.current.has(signalKey) && knownCount >= 420) {
+        if (!pinned && !latestMapRef.current.has(signalKey) && knownCount >= LIVE_SIGNAL_CAP) {
           continue;
         }
 
@@ -181,6 +200,16 @@ export function useTelemetryController() {
 
     await storeRef.current?.stopSession();
     setActiveSessionId(null);
+    setStreamStartedAt(null);
+
+    try {
+      const sessions = await storeRef.current?.getRecentSessions(20);
+      if (sessions) {
+        setRecentSessions(sessions);
+      }
+    } catch {
+      // Session list is best-effort; the stream itself already stopped.
+    }
 
     if (bleRef.current?.getConnectionState().connected) {
       setStatus('connected');
@@ -263,7 +292,8 @@ export function useTelemetryController() {
     }
   }, [stopScan]);
 
-  const startStreaming = useCallback(async () => {
+  const startStreaming = useCallback(async (disabledOverride?: Set<number>) => {
+    const disabled = disabledOverride ?? disabledPollIds;
     const elm = elmRef.current;
     const dbc = dbcRef.current;
     const store = storeRef.current;
@@ -279,7 +309,7 @@ export function useTelemetryController() {
     let targets: PollTarget[] | null = null;
     if (canFilterEnabled) {
       const catalog = pollCatalog.length > 0 ? pollCatalog : describePollTargets(dbc, selectedVehicleProfile);
-      targets = toPollTargets(catalog.filter((info) => !disabledPollIds.has(info.id)));
+      targets = toPollTargets(catalog.filter((info) => !disabled.has(info.id)));
       if (targets.length === 0) {
         setError('Select at least one signal group to stream.');
         return;
@@ -320,6 +350,7 @@ export function useTelemetryController() {
       await elm.startMonitoring(onFrame);
     }
 
+    setStreamStartedAt(Date.now());
     setStatus('streaming');
   }, [
     canFilterEnabled,
@@ -348,8 +379,9 @@ export function useTelemetryController() {
       try {
         const nextDbc = await loadVehicleDbc(profileId);
         dbcRef.current = nextDbc;
-        setPollCatalog(describePollTargets(nextDbc, getVehicleProfileById(profileId)));
-        setDisabledPollIds(new Set());
+        const nextCatalog = describePollTargets(nextDbc, getVehicleProfileById(profileId));
+        setPollCatalog(nextCatalog);
+        setDisabledPollIds(defaultDisabledPollIds(nextCatalog));
         setSelectedVehicleProfileId(profileId);
         clearLiveSignalCache(true);
         setStatus('idle');
@@ -380,6 +412,74 @@ export function useTelemetryController() {
     },
     [pollCatalog],
   );
+
+  /** Restore the default lightweight selection (core + HV). */
+  const resetPollSelection = useCallback(() => {
+    setDisabledPollIds(defaultDisabledPollIds(pollCatalog));
+  }, [pollCatalog]);
+
+  /** Enable or disable every message that feeds one EV system's screen. */
+  const setSystemPollEnabled = useCallback(
+    (systemId: SystemId, enabled: boolean) => {
+      setDisabledPollIds((current) => {
+        const next = new Set(current);
+        for (const info of pollCatalog) {
+          if (!pollTargetServes(info, systemId)) {
+            continue;
+          }
+          if (enabled) {
+            next.delete(info.id);
+          } else {
+            next.add(info.id);
+          }
+        }
+        return next;
+      });
+    },
+    [pollCatalog],
+  );
+
+  /**
+   * Stream only what one system needs (fastest refresh for that screen).
+   * Restarts the stream when it is already running so the new filter applies.
+   */
+  const focusSystem = useCallback(
+    async (systemId: SystemId) => {
+      // Nothing in this profile feeds the system: keep the current stream as is.
+      if (!pollCatalog.some((info) => pollTargetServes(info, systemId))) {
+        return;
+      }
+      const next = new Set(
+        pollCatalog.filter((info) => !pollTargetServes(info, systemId)).map((info) => info.id),
+      );
+      setDisabledPollIds(next);
+
+      if (status === 'streaming') {
+        await stopStreaming();
+        await startStreaming(next);
+      } else if (status === 'connected') {
+        await startStreaming(next);
+      }
+    },
+    [pollCatalog, startStreaming, status, stopStreaming],
+  );
+
+  const refreshSessions = useCallback(async () => {
+    const sessions = await storeRef.current?.getRecentSessions(20);
+    if (sessions) {
+      setRecentSessions(sessions);
+    }
+  }, []);
+
+  const exportSession = useCallback(async (sessionId: string): Promise<string | null> => {
+    const store = storeRef.current;
+    if (!store) {
+      return null;
+    }
+    const uri = await exportSessionAsCsv(store, sessionId);
+    setLastExportUri(uri);
+    return uri;
+  }, []);
 
   const sendAtCommand = useCallback(async (command: string): Promise<string[]> => {
     const elm = elmRef.current;
@@ -425,8 +525,18 @@ export function useTelemetryController() {
         const bootDbc = await loadVehicleDbc(DEFAULT_VEHICLE_PROFILE_ID);
         dbcRef.current = bootDbc;
         if (mounted) {
-          setPollCatalog(describePollTargets(bootDbc, getVehicleProfileById(DEFAULT_VEHICLE_PROFILE_ID)));
+          const bootCatalog = describePollTargets(bootDbc, getVehicleProfileById(DEFAULT_VEHICLE_PROFILE_ID));
+          setPollCatalog(bootCatalog);
+          setDisabledPollIds(defaultDisabledPollIds(bootCatalog));
           setStatus('idle');
+          store
+            .getRecentSessions(20)
+            .then((sessions) => {
+              if (mounted) {
+                setRecentSessions(sessions);
+              }
+            })
+            .catch(() => undefined);
         }
       } catch (bootstrapError) {
         if (!mounted) {
@@ -495,6 +605,13 @@ export function useTelemetryController() {
     disabledPollIds,
     togglePollId,
     setAllPollEnabled,
+    resetPollSelection,
+    setSystemPollEnabled,
+    focusSystem,
+    recentSessions,
+    refreshSessions,
+    exportSession,
+    streamStartedAt,
     scanForAdapters,
     stopScan,
     connectToAdapter,

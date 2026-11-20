@@ -96,6 +96,6 @@ The app now keeps vehicle-specific CAN concerns in profile metadata instead of s
   - Canonical signal alias mapping (`aliases`)
   - Widget metric layout (`dashboardPrimaryMetrics`, `dashboardSecondaryMetrics`)
 - `src/lib/dbc/dbcLoader.ts` loads DBC files from profile metadata (not hardcoded maps in multiple places).
-- `src/app/useTelemetryController.ts` resolves decoded DBC names to canonical metric names at runtime.
+- `src/state/useTelemetryController.ts` resolves decoded DBC names to canonical metric names at runtime.
 
 Result: when CAN databases evolve, the usual change path is to update DBC files and profile metadata, while UI/controller flow remains unchanged.
