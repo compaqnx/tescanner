@@ -37,6 +37,18 @@ function compareDiscoveredDevices(a: BleDeviceInfo, b: BleDeviceInfo): number {
   return (b.rssi ?? -999) - (a.rssi ?? -999);
 }
 
+// Accepts an Android Bluetooth MAC in any punctuation (8C:08:79:AC:4C:F1,
+// 8c0879ac4cf1, 8C-08-79-…) and returns the canonical colon form, or null when it
+// is not 12 hex digits. Lets the user connect by the address shown in Android's
+// Bluetooth settings when the dongle never appears in the scan.
+function normalizeBleAddress(raw: string): string | null {
+  const hex = raw.trim().toUpperCase().replace(/[^0-9A-F]/g, '');
+  if (hex.length !== 12) {
+    return null;
+  }
+  return hex.match(/.{2}/g)!.join(':');
+}
+
 export type TelemetryStatus =
   | 'booting'
   | 'idle'
@@ -281,6 +293,21 @@ export function useTelemetryController() {
     setDevices([]);
     setStatus('scanning');
 
+    // A dongle already connected/bonded at the OS level does not advertise, so it
+    // never shows up in the live scan. List those first (with their OS-known name)
+    // so a Classic-paired vLinker still appears as something the user can tap.
+    const known = await ble.listKnownDevices();
+    if (known.length > 0) {
+      appendLog(`${known.length} already-known device(s) added from the system.`);
+      setDevices((current) => {
+        const byId = new Map<string, BleDeviceInfo>(current.map((entry) => [entry.id, entry] as const));
+        for (const device of known) {
+          byId.set(device.id, device);
+        }
+        return Array.from(byId.values()).sort(compareDiscoveredDevices);
+      });
+    }
+
     stopScanRef.current = ble.startScan(
       (device) => {
         // Upsert: replace any existing entry for this id so a late-arriving name
@@ -316,7 +343,22 @@ export function useTelemetryController() {
 
       try {
         const state = await ble.connect(deviceId);
-        appendLog(`Connected to ${state.deviceName ?? deviceId}. Initializing adapter…`);
+        const resolvedName = state.deviceName ?? deviceId;
+        appendLog(`Connected to ${resolvedName}. Initializing adapter…`);
+
+        // The real name is only known once connected (scan packets are often
+        // nameless). Record it so the list shows "vLinker FS …" instead of
+        // "Unknown device", and so a manually-entered address appears at all.
+        setDevices((current) => {
+          const existing = current.find((entry) => entry.id === deviceId);
+          const merged: BleDeviceInfo = {
+            id: deviceId,
+            name: resolvedName,
+            localName: existing?.localName,
+            rssi: existing?.rssi,
+          };
+          return [...current.filter((entry) => entry.id !== deviceId), merged].sort(compareDiscoveredDevices);
+        });
 
         const elm = new Elm327Session(ble);
         await elm.initializeAdapter();
@@ -333,6 +375,27 @@ export function useTelemetryController() {
       }
     },
     [appendLog, stopScan],
+  );
+
+  /**
+   * Connect straight to a Bluetooth address the user typed (the one shown in
+   * Android's Bluetooth settings), skipping the scan. On Android a bonded dual-mode
+   * dongle can be reached by its MAC even when it never advertises — the usual
+   * reason a paired vLinker FS never shows up in the list.
+   */
+  const connectToAddress = useCallback(
+    async (rawAddress: string) => {
+      const address = normalizeBleAddress(rawAddress);
+      if (!address) {
+        appendLog(`"${rawAddress.trim()}" is not a valid Bluetooth address (expected 12 hex digits).`);
+        setError('Enter a Bluetooth address like 8C:08:79:AC:4C:F1.');
+        setStatus('error');
+        return;
+      }
+      appendLog(`Manual connect to ${address} (bypassing scan)…`);
+      await connectToAdapter(address);
+    },
+    [appendLog, connectToAdapter],
   );
 
   const startStreaming = useCallback(async (disabledOverride?: Set<number>) => {
@@ -661,6 +724,7 @@ export function useTelemetryController() {
     scanForAdapters,
     stopScan,
     connectToAdapter,
+    connectToAddress,
     disconnect,
     setVehicleProfile,
     startStreaming,

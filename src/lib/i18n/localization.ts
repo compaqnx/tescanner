@@ -136,6 +136,12 @@ const EN: Dictionary = {
   connectedState: 'Connected',
   genericNotAvailable: 'n/a',
 
+  manualAddressTitle: 'Connect by address',
+  manualAddressPlaceholder: '8C:08:79:AC:4C:F1',
+  actionConnectManual: 'Connect',
+  manualAddressHint:
+    'If the dongle pairs in Android settings but never appears above, paste the address shown there and connect directly (Android). If this also fails, the dongle is in Classic/MFi mode — switch it to BLE (4.0+) mode and "Forget" it in Bluetooth settings.',
+
   modelNameModel3: 'Tesla Model 3',
   modelNameModelY: 'Tesla Model Y',
   modelNameModelS: 'Tesla Model S',
@@ -419,6 +425,12 @@ const RO: Dictionary = {
   actionConnect: 'Conecteaza',
   connectedState: 'Conectat',
   genericNotAvailable: 'n/a',
+
+  manualAddressTitle: 'Conectare dupa adresa',
+  manualAddressPlaceholder: '8C:08:79:AC:4C:F1',
+  actionConnectManual: 'Conecteaza',
+  manualAddressHint:
+    'Daca dongle-ul se imperecheaza in setarile Android dar nu apare mai sus, lipeste adresa de acolo si conecteaza-te direct (Android). Daca nici asa nu merge, dongle-ul e in mod Classic/MFi — comuta-l pe mod BLE (4.0+) si apasa "Uita" in setarile Bluetooth.',
 
   modelNameModel3: 'Tesla Model 3',
   modelNameModelY: 'Tesla Model Y',

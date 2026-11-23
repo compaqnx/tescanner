@@ -25,6 +25,17 @@ export interface BleConnectionState {
 
 const DEFAULT_SCAN_TIMEOUT_MS = 12_000;
 
+// Service UUIDs commonly exposed by ELM327/STN BLE OBD adapters. Used to surface a
+// dongle that is already connected at the OS level — such a device stops
+// advertising, so a fresh scan never lists it even though it is reachable.
+const COMMON_OBD_SERVICE_UUIDS = [
+  '0000fff0-0000-1000-8000-00805f9b34fb', // ELM327 clones (FFF0 / FFF1 / FFF2)
+  '0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10 style serial (FFE0 / FFE1)
+  '0000ffe5-0000-1000-8000-00805f9b34fb',
+  '000018f0-0000-1000-8000-00805f9b34fb', // some vLinker / vGate builds
+  '6e400001-b5a3-f393-e0a9-e50e24dcca9e', // Nordic UART
+];
+
 export class VLinkerBleClient {
   private readonly manager = new BleManager();
   private connectedDevice: Device | null = null;
@@ -175,6 +186,30 @@ export class VLinkerBleClient {
 
   stopScan(): void {
     this.manager.stopDeviceScan();
+  }
+
+  /**
+   * Devices already connected to the phone at the OS level that expose a known OBD
+   * service. A dongle connected this way (or a dual-mode dongle bonded over
+   * Bluetooth Classic) no longer advertises, so a scan alone would miss it.
+   * Surfacing it here lets the user connect without seeing it in the scan.
+   */
+  async listKnownDevices(): Promise<BleDeviceInfo[]> {
+    try {
+      const connected = await this.manager.connectedDevices(COMMON_OBD_SERVICE_UUIDS);
+      if (connected.length > 0) {
+        this.log(`${connected.length} already-connected OBD device(s) found via the system.`);
+      }
+      return connected.map((device) => ({
+        id: device.id,
+        name: device.name ?? device.localName ?? 'Known adapter',
+        localName: device.localName,
+        rssi: device.rssi,
+      }));
+    } catch (error) {
+      this.log(`Known-device lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
+    }
   }
 
   async connect(deviceId: string): Promise<BleConnectionState> {

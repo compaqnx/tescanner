@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { estimateCycleMs, pollTargetServes } from '../../lib/can/pollPlan';
 import type { TranslationKey } from '../../lib/i18n/localization';
 import { labelFor } from '../../lib/systems/readSignals';
@@ -36,6 +36,8 @@ export default function SetupScreen() {
   const { columns, width } = useColumns(220, 3);
   const profileWidth = tileWidth(Math.min(columns, 2), width - spacing.md * 2);
   const [showAllIds, setShowAllIds] = useState(false);
+  const [manualAddress, setManualAddress] = useState('');
+  const connectBusy = status === 'connecting' || actionBusy !== null || isStreaming;
 
   const enabledInfos = useMemo(
     () => pollCatalog.filter((info) => !disabledPollIds.has(info.id)),
@@ -103,6 +105,31 @@ export default function SetupScreen() {
             );
           })
         )}
+
+        {/* Fallback: connect straight to the address Android shows for the paired
+            dongle, for when a Classic-bonded vLinker never advertises in the scan. */}
+        <Text style={styles.subLabel}>{t('manualAddressTitle')}</Text>
+        <View style={styles.manualRow}>
+          <TextInput
+            value={manualAddress}
+            onChangeText={setManualAddress}
+            placeholder={t('manualAddressPlaceholder')}
+            placeholderTextColor={colors.textDim}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            spellCheck={false}
+            style={styles.addrInput}
+          />
+          <Button
+            compact
+            variant="secondary"
+            icon="bluetooth-settings"
+            label={t('actionConnectManual')}
+            disabled={manualAddress.trim().length === 0 || connectBusy}
+            onPress={() => runAction('connect-manual', () => app.connectToAddress(manualAddress))}
+          />
+        </View>
+        <Hint>{t('manualAddressHint')}</Hint>
       </Card>
 
       {/* Connection log: live scan & connect events, to debug adapter discovery. */}
@@ -340,6 +367,19 @@ const styles = StyleSheet.create({
   idLabel: { color: colors.text, fontFamily: fonts.body, fontSize: 13 },
   idMeta: { color: colors.textDim, fontFamily: fonts.mono, fontSize: 10 },
   subLabel: { color: colors.textMuted, fontFamily: fonts.heading, fontSize: 12 },
+  manualRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  addrInput: {
+    flex: 1,
+    minHeight: TOUCH_TARGET,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceRaised,
+    color: colors.text,
+    fontFamily: fonts.mono,
+    fontSize: 14,
+  },
   logBox: { gap: 2, paddingTop: spacing.sm },
   logLine: { color: colors.textMuted, fontFamily: fonts.mono, fontSize: 11, lineHeight: 15 },
   capRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
