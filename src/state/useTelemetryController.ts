@@ -18,6 +18,25 @@ import {
 import { SessionStore } from '../lib/export/sessionStore';
 import { exportSessionAsCsv } from '../lib/export/csv';
 
+// Names that hint a device is an OBD adapter — used only to sort likely adapters
+// to the top of the list, never to hide anything (the dongle often advertises no
+// name during a scan, so excluding unnamed devices is why it never appeared).
+const ADAPTER_NAME_HINTS = ['vlinker', 'vgate', 'obd', 'elm', 'stn', 'icar', 'veepeak', 'carista', 'scantool', 'can'];
+
+function isLikelyAdapter(device: BleDeviceInfo): boolean {
+  const haystack = `${device.name} ${device.localName ?? ''}`.toLowerCase();
+  return ADAPTER_NAME_HINTS.some((hint) => haystack.includes(hint));
+}
+
+function compareDiscoveredDevices(a: BleDeviceInfo, b: BleDeviceInfo): number {
+  const likelyA = isLikelyAdapter(a) ? 1 : 0;
+  const likelyB = isLikelyAdapter(b) ? 1 : 0;
+  if (likelyA !== likelyB) {
+    return likelyB - likelyA;
+  }
+  return (b.rssi ?? -999) - (a.rssi ?? -999);
+}
+
 export type TelemetryStatus =
   | 'booting'
   | 'idle'
@@ -78,6 +97,15 @@ export function useTelemetryController() {
   const [disabledPollIds, setDisabledPollIds] = useState<Set<number>>(new Set());
   const [recentSessions, setRecentSessions] = useState<SessionSummary[]>([]);
   const [streamStartedAt, setStreamStartedAt] = useState<number | null>(null);
+  const [connectionLog, setConnectionLog] = useState<string[]>([]);
+
+  const appendLog = useCallback((message: string) => {
+    const stamp = new Date().toLocaleTimeString();
+    setConnectionLog((current) => [`${stamp}  ${message}`, ...current].slice(0, 200));
+  }, []);
+  const appendLogRef = useRef(appendLog);
+  appendLogRef.current = appendLog;
+  const clearConnectionLog = useCallback(() => setConnectionLog([]), []);
 
   const selectedVehicleProfile = useMemo(
     () => getVehicleProfileById(selectedVehicleProfileId),
@@ -236,14 +264,17 @@ export function useTelemetryController() {
     }
 
     setError(null);
+    appendLog('Requesting Bluetooth permission…');
 
     const granted = await ble.requestPermissions();
     if (!granted) {
+      appendLog('Bluetooth permission denied.');
       setStatus('error');
       setError('Bluetooth permission was denied.');
       return;
     }
 
+    appendLog('Waiting for Bluetooth to power on…');
     await ble.waitForPoweredOn();
 
     stopScan();
@@ -252,45 +283,57 @@ export function useTelemetryController() {
 
     stopScanRef.current = ble.startScan(
       (device) => {
+        // Upsert: replace any existing entry for this id so a late-arriving name
+        // or RSSI update is reflected, then keep likely adapters on top.
         setDevices((current) => {
-          if (current.some((entry) => entry.id === device.id)) {
-            return current;
-          }
-
-          return [...current, device].sort((a, b) => (b.rssi ?? -999) - (a.rssi ?? -999));
+          const others = current.filter((entry) => entry.id !== device.id);
+          return [...others, device].sort(compareDiscoveredDevices);
         });
       },
       {
-        filterNames: ['VLINKER', 'VGATE', 'OBD', 'ELM'],
+        // Only used to sort likely adapters first — no device is excluded.
+        filterNames: ADAPTER_NAME_HINTS,
+        onScanComplete: (count) => {
+          appendLog(`Scan complete — ${count} device(s) found.`);
+          // The scan timed out on its own; return the UI to idle if still scanning.
+          setStatus((current) => (current === 'scanning' ? 'idle' : current));
+        },
       },
     );
-  }, [stopScan]);
+  }, [appendLog, stopScan]);
 
-  const connectToAdapter = useCallback(async (deviceId: string) => {
-    const ble = bleRef.current;
-    if (!ble) {
-      return;
-    }
+  const connectToAdapter = useCallback(
+    async (deviceId: string) => {
+      const ble = bleRef.current;
+      if (!ble) {
+        return;
+      }
 
-    stopScan();
-    setError(null);
-    setStatus('connecting');
+      stopScan();
+      setError(null);
+      setStatus('connecting');
+      appendLog(`Connecting to ${deviceId}…`);
 
-    try {
-      await ble.connect(deviceId);
+      try {
+        const state = await ble.connect(deviceId);
+        appendLog(`Connected to ${state.deviceName ?? deviceId}. Initializing adapter…`);
 
-      const elm = new Elm327Session(ble);
-      await elm.initializeAdapter();
+        const elm = new Elm327Session(ble);
+        await elm.initializeAdapter();
 
-      elmRef.current = elm;
-      setSelectedDeviceId(deviceId);
-      setStatus('connected');
-    } catch (connectError) {
-      const message = connectError instanceof Error ? connectError.message : String(connectError);
-      setError(message);
-      setStatus('error');
-    }
-  }, [stopScan]);
+        elmRef.current = elm;
+        setSelectedDeviceId(deviceId);
+        setStatus('connected');
+        appendLog('Adapter initialized — ready to stream.');
+      } catch (connectError) {
+        const message = connectError instanceof Error ? connectError.message : String(connectError);
+        appendLog(`Connection failed: ${message}`);
+        setError(message);
+        setStatus('error');
+      }
+    },
+    [appendLog, stopScan],
+  );
 
   const startStreaming = useCallback(async (disabledOverride?: Set<number>) => {
     const disabled = disabledOverride ?? disabledPollIds;
@@ -520,6 +563,7 @@ export function useTelemetryController() {
 
       bleRef.current = ble;
       storeRef.current = store;
+      ble.setLogger((message) => appendLogRef.current(message));
 
       try {
         const bootDbc = await loadVehicleDbc(DEFAULT_VEHICLE_PROFILE_ID);
@@ -612,6 +656,8 @@ export function useTelemetryController() {
     refreshSessions,
     exportSession,
     streamStartedAt,
+    connectionLog,
+    clearConnectionLog,
     scanForAdapters,
     stopScan,
     connectToAdapter,

@@ -61,6 +61,9 @@ export default function SetupScreen() {
             disabled={isBusy || actionBusy !== null || isStreaming}
             onPress={() => runAction('scan', app.scanForAdapters)}
           />
+          {status === 'scanning' ? (
+            <Button variant="secondary" icon="stop" label={t('actionStopScan')} onPress={app.stopScan} />
+          ) : null}
           {isConnected ? (
             <Button
               variant="secondary"
@@ -99,6 +102,32 @@ export default function SetupScreen() {
               </View>
             );
           })
+        )}
+      </Card>
+
+      {/* Connection log: live scan & connect events, to debug adapter discovery. */}
+      <Card title={t('connectionLog')} icon="console-line" subtitle={t('connectionLogHint')}>
+        {app.connectionLog.length > 0 ? (
+          <ButtonRow>
+            <Button
+              compact
+              variant="ghost"
+              icon="trash-can-outline"
+              label={t('actionClearLog')}
+              onPress={app.clearConnectionLog}
+            />
+          </ButtonRow>
+        ) : null}
+        {app.connectionLog.length === 0 ? (
+          <EmptyState icon="console" text={t('connectionLogEmpty')} />
+        ) : (
+          <View style={styles.logBox}>
+            {app.connectionLog.slice(0, 60).map((line, index) => (
+              <Text key={`${index}-${line}`} style={styles.logLine} numberOfLines={2}>
+                {line}
+              </Text>
+            ))}
+          </View>
         )}
       </Card>
 
@@ -311,6 +340,8 @@ const styles = StyleSheet.create({
   idLabel: { color: colors.text, fontFamily: fonts.body, fontSize: 13 },
   idMeta: { color: colors.textDim, fontFamily: fonts.mono, fontSize: 10 },
   subLabel: { color: colors.textMuted, fontFamily: fonts.heading, fontSize: 12 },
+  logBox: { gap: 2, paddingTop: spacing.sm },
+  logLine: { color: colors.textMuted, fontFamily: fonts.mono, fontSize: 11, lineHeight: 15 },
   capRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
   capText: { color: colors.text, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, flex: 1 },
 });

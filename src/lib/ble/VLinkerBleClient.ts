@@ -2,6 +2,7 @@ import {
   BleManager,
   Characteristic,
   Device,
+  ScanMode,
   State,
   type ScanOptions,
   type Subscription,
@@ -34,7 +35,17 @@ export class VLinkerBleClient {
   private disconnectSubscription: Subscription | null = null;
 
   private lineListener?: (line: string) => void;
+  private logger?: (message: string) => void;
   private readBuffer = '';
+
+  /** Receives human-readable scan/connect events for the in-app console log. */
+  setLogger(logger?: (message: string) => void): void {
+    this.logger = logger;
+  }
+
+  private log(message: string): void {
+    this.logger?.(message);
+  }
 
   async requestPermissions(): Promise<boolean> {
     if (Platform.OS !== 'android') {
@@ -90,50 +101,76 @@ export class VLinkerBleClient {
     onDeviceDiscovered: (device: BleDeviceInfo) => void,
     options?: {
       timeoutMs?: number;
+      /** Names here are only used to highlight likely adapters, never to exclude devices. */
       filterNames?: string[];
       scanOptions?: ScanOptions;
+      onScanComplete?: (deviceCount: number) => void;
     },
   ): () => void {
     const timeoutMs = options?.timeoutMs ?? DEFAULT_SCAN_TIMEOUT_MS;
-    const expectedNames = (options?.filterNames ?? []).map((name) => name.toLowerCase());
-    const seenIds = new Set<string>();
+    const preferredNames = (options?.filterNames ?? []).map((name) => name.toLowerCase());
+    // Track the best name seen per device so late-arriving names (often only in the
+    // scan response) get reported without spamming the UI on every advertisement.
+    const reportedNames = new Map<string, string>();
 
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let completed = false;
 
-    this.manager.startDeviceScan(null, options?.scanOptions ?? null, (error, device) => {
-      if (error || !device?.id) {
+    const complete = () => {
+      if (completed) {
+        return;
+      }
+      completed = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      this.stopScan();
+      this.log(`Scan stopped — ${reportedNames.size} device(s) seen.`);
+      options?.onScanComplete?.(reportedNames.size);
+    };
+
+    // allowDuplicates + low-latency so names/RSSI that arrive after the first
+    // advertisement are still captured; many OBD dongles advertise no name initially.
+    const scanOptions: ScanOptions =
+      options?.scanOptions ?? { allowDuplicates: true, scanMode: ScanMode.LowLatency };
+
+    this.log('Scanning for BLE devices (all devices shown)…');
+    this.manager.startDeviceScan(null, scanOptions, (error, device) => {
+      if (error) {
+        this.log(`Scan error: ${error.message ?? String(error)}`);
+        return;
+      }
+      if (!device?.id) {
         return;
       }
 
-      if (seenIds.has(device.id)) {
+      const name = device.name ?? device.localName ?? '';
+      const previous = reportedNames.get(device.id);
+      const firstSight = previous === undefined;
+
+      // Re-report only when a name first appears for a device we already listed.
+      if (!firstSight && (name === '' || name === previous)) {
         return;
       }
+      reportedNames.set(device.id, name !== '' ? name : (previous ?? ''));
 
-      const deviceName = device.name ?? device.localName ?? '';
-      const lowerName = deviceName.toLowerCase();
-      if (expectedNames.length > 0 && !expectedNames.some((name) => lowerName.includes(name))) {
-        return;
+      if (firstSight) {
+        const preferred = name !== '' && preferredNames.some((hint) => name.toLowerCase().includes(hint));
+        this.log(`Found ${name || '(no name)'} [${device.id}] rssi=${device.rssi ?? '?'}${preferred ? ' ★' : ''}`);
       }
 
-      seenIds.add(device.id);
       onDeviceDiscovered({
         id: device.id,
-        name: device.name ?? 'Unknown device',
+        name: name !== '' ? name : 'Unknown device',
         localName: device.localName,
         rssi: device.rssi,
       });
     });
 
-    timer = setTimeout(() => {
-      this.stopScan();
-    }, timeoutMs);
+    timer = setTimeout(complete, timeoutMs);
 
-    return () => {
-      if (timer) {
-        clearTimeout(timer);
-      }
-      this.stopScan();
-    };
+    return complete;
   }
 
   stopScan(): void {
@@ -151,6 +188,7 @@ export class VLinkerBleClient {
       timeout: 10_000,
     });
 
+    this.log('Link established, discovering services…');
     const ready = await connected.discoverAllServicesAndCharacteristics();
 
     const services = await ready.services();
@@ -160,6 +198,8 @@ export class VLinkerBleClient {
       const serviceCharacteristics = await service.characteristics();
       characteristics.push(...serviceCharacteristics);
     }
+
+    this.log(`Found ${characteristics.length} characteristic(s) in ${services.length} service(s).`);
 
     this.notifyCharacteristic =
       characteristics.find((characteristic) => characteristic.isNotifiable) ||
@@ -172,9 +212,13 @@ export class VLinkerBleClient {
       null;
 
     if (!this.writeCharacteristic || !this.notifyCharacteristic) {
+      this.log('No notify/write characteristics found — not an OBD serial adapter?');
       throw new Error('Could not find matching read/write BLE characteristics on adapter.');
     }
 
+    this.log(
+      `Using notify ${this.notifyCharacteristic.uuid.slice(0, 8)} / write ${this.writeCharacteristic.uuid.slice(0, 8)}.`,
+    );
     this.connectedDevice = ready;
     this.attachDisconnectListener(ready);
     this.attachNotificationMonitor(ready, this.notifyCharacteristic);
@@ -190,6 +234,7 @@ export class VLinkerBleClient {
     this.disconnectSubscription?.remove();
     this.disconnectSubscription = device.onDisconnected((_error, disconnectedDevice) => {
       if (disconnectedDevice?.id === this.connectedDevice?.id) {
+        this.log('Adapter disconnected.');
         this.connectedDevice = null;
         this.writeCharacteristic = null;
         this.notifyCharacteristic = null;
