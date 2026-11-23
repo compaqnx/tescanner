@@ -169,6 +169,14 @@ const EN: Dictionary = {
 
   sectionRawCan: 'Recent Raw CAN Lines',
   waitingTraffic: 'Waiting for incoming traffic.',
+  rawViewLines: 'Live lines',
+  rawViewIds: 'By ID',
+  rawStats: '{lines} lines · {frames} frames · {ids} IDs · {unparsed} not frames',
+  rawNotFrame: 'adapter message',
+  rawIdCount: '×{count}',
+  rawNoFramesHint:
+    'The adapter is sending lines but none parse as CAN frames. The lines below show exactly what it sends.',
+  rawIdleHint: 'Start streaming to see the adapter output here.',
 
   dashboardLocation: 'Location',
   dashboardCharging: 'Charging',
@@ -459,6 +467,14 @@ const RO: Dictionary = {
 
   sectionRawCan: 'Linii CAN brute recente',
   waitingTraffic: 'Se asteapta trafic.',
+  rawViewLines: 'Linii live',
+  rawViewIds: 'Pe ID',
+  rawStats: '{lines} linii · {frames} cadre · {ids} ID-uri · {unparsed} non-cadre',
+  rawNotFrame: 'mesaj adaptor',
+  rawIdCount: '×{count}',
+  rawNoFramesHint:
+    'Adaptorul trimite linii, dar niciuna nu este un cadru CAN valid. Liniile de mai jos arata exact ce trimite.',
+  rawIdleHint: 'Porneste streamingul pentru a vedea aici iesirea adaptorului.',
 
   dashboardLocation: 'Locatie',
   dashboardCharging: 'Incarcare',

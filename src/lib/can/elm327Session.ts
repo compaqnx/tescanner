@@ -8,13 +8,33 @@ interface PendingCommand {
   reject: (error: Error) => void;
   lines: string[];
   timeout: ReturnType<typeof setTimeout>;
+  /**
+   * True while waiting for the prompt after interrupting ATMA: lines still in
+   * flight are frames captured before the stop, so they go to the frame listener
+   * instead of being swallowed as command output.
+   */
+  drainingMonitor: boolean;
+}
+
+/** One line seen on the wire while monitoring, parsed or not (for the Raw CAN view). */
+export interface RawMonitorLine {
+  line: string;
+  timestamp: number;
+  frame: CanFrame | null;
 }
 
 const DEFAULT_TIMEOUT_MS = 2_000;
-// Gap after stopping ATMA so the adapter's STOPPED/prompt flush before the next
-// filter command, and a short backoff when a write fails mid-cycle.
-const POLL_GAP_MS = 40;
+// How long to wait for STOPPED + '>' after interrupting ATMA. Over Bluetooth the
+// prompt can lag well behind the stop, so the next command must not be sent
+// before it arrives or the stale '>' completes that command instead.
+const STOP_TIMEOUT_MS = 600;
+// Short backoff when a write fails mid-cycle.
 const POLL_BACKOFF_MS = 60;
+// Interrupts ATMA. A single non-CR character: a bare CR on an idle adapter would
+// repeat the last command (ATMA), and a trailing CR after the interrupt can do the
+// same once the prompt is back. A stray space on an idle adapter is harmless —
+// the ELM327 ignores spaces in the next command.
+const MONITOR_INTERRUPT = ' ';
 
 function idToReceiveAddress(id: number): string {
   const hex = id.toString(16).toUpperCase();
@@ -28,6 +48,7 @@ export class Elm327Session {
   private pollGeneration = 0;
   private sleepCancel: (() => void) | null = null;
   private frameListener?: (frame: CanFrame) => void;
+  private rawLineListener?: (line: RawMonitorLine) => void;
 
   constructor(private readonly bleClient: VLinkerBleClient) {
     this.bleClient.setLineListener((line) => {
@@ -35,12 +56,20 @@ export class Elm327Session {
     });
   }
 
+  /** Receives every line seen while monitoring — frames and adapter messages alike. */
+  setRawLineListener(listener?: (line: RawMonitorLine) => void): void {
+    this.rawLineListener = listener;
+  }
+
   async initializeAdapter(): Promise<void> {
     await this.sendCommand('ATZ', 4_000);
     await this.sendCommand('ATE0');
     await this.sendCommand('ATL0');
+    // Spaces off keeps monitor lines ~30% shorter over Bluetooth; the frame
+    // parser handles the compact "3D2A1B2C..." form.
     await this.sendCommand('ATS0');
     await this.sendCommand('ATH1');
+    await this.sendCommand('ATD0');
     await this.sendCommand('ATSP6');
     await this.sendCommand('ATCAF0');
     await this.sendCommand('ATCFC0');
@@ -49,18 +78,30 @@ export class Elm327Session {
   async sendCommand(command: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string[]> {
     // Writing anything to the adapter while ATMA is running silently stops the
     // live stream, so refuse commands until monitoring is stopped.
-    if (this.monitorActive) {
+    // The filtered poll loop sends its own commands between dwells, so outside
+    // commands are refused for the whole stream, not just while ATMA runs.
+    if (this.monitorActive || this.pollActive) {
       throw new Error('Stop the live stream before sending commands.');
     }
 
-    if (this.pendingCommand) {
-      throw new Error('A command is already in progress.');
-    }
+    return this.command(command, timeoutMs);
+  }
 
+  private command(command: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string[]> {
     const normalized = command.trim();
     if (!normalized) {
-      throw new Error('Command cannot be empty.');
+      return Promise.reject(new Error('Command cannot be empty.'));
     }
+
+    return this.writeAndAwaitPrompt(`${normalized}\r`, timeoutMs, false);
+  }
+
+  private writeAndAwaitPrompt(payload: string, timeoutMs: number, drainingMonitor: boolean): Promise<string[]> {
+    if (this.pendingCommand) {
+      return Promise.reject(new Error('A command is already in progress.'));
+    }
+
+    const label = payload.trim() || 'monitor stop';
 
     return new Promise<string[]>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -68,8 +109,14 @@ export class Elm327Session {
           return;
         }
 
+        const { lines } = this.pendingCommand;
         this.pendingCommand = null;
-        reject(new Error(`Command timed out: ${normalized}`));
+        if (drainingMonitor) {
+          // The adapter may already have been idle; nothing to wait for.
+          resolve(lines);
+        } else {
+          reject(new Error(`Command timed out: ${label}`));
+        }
       }, timeoutMs);
 
       this.pendingCommand = {
@@ -77,27 +124,45 @@ export class Elm327Session {
         reject,
         lines: [],
         timeout,
+        drainingMonitor,
       };
 
-      this.bleClient
-        .write(`${normalized}\r`)
-        .catch((error: unknown) => {
-          if (!this.pendingCommand) {
-            return;
-          }
+      this.bleClient.write(payload).catch((error: unknown) => {
+        if (!this.pendingCommand) {
+          return;
+        }
 
-          clearTimeout(this.pendingCommand.timeout);
-          this.pendingCommand = null;
+        clearTimeout(this.pendingCommand.timeout);
+        this.pendingCommand = null;
+        if (drainingMonitor) {
+          resolve([]);
+        } else {
           reject(error instanceof Error ? error : new Error(String(error)));
-        });
+        }
+      });
     });
   }
 
-  async startMonitoring(listener: (frame: CanFrame) => void): Promise<void> {
-    this.monitorActive = true;
-    this.frameListener = listener;
+  /** Interrupts ATMA and waits for the adapter's prompt so the next command is clean. */
+  private async interruptMonitor(): Promise<void> {
+    this.monitorActive = false;
+    await this.writeAndAwaitPrompt(MONITOR_INTERRUPT, STOP_TIMEOUT_MS, true);
+  }
 
-    await this.bleClient.write('ATMA\r');
+  /** Unfiltered monitoring of the whole bus. */
+  async startMonitoring(listener: (frame: CanFrame) => void): Promise<void> {
+    // A previous filtered stream leaves an ATCRA receive filter in place, which
+    // would silently restrict this "monitor all" stream to one id.
+    await this.sendCommand('ATAR');
+
+    this.frameListener = listener;
+    this.monitorActive = true;
+    try {
+      await this.bleClient.write('ATMA\r');
+    } catch (error) {
+      this.monitorActive = false;
+      throw error;
+    }
   }
 
   /**
@@ -131,7 +196,7 @@ export class Elm327Session {
       // The monitor must be stopped to send a command, which the loop guarantees
       // (it is off on entry and after each dwell below).
       try {
-        await this.sendCommand(`ATCRA ${idToReceiveAddress(target.id)}`);
+        await this.command(`ATCRA ${idToReceiveAddress(target.id)}`);
       } catch {
         if (!live()) {
           break;
@@ -158,14 +223,17 @@ export class Elm327Session {
 
       await this.sleep(target.dwellMs);
 
-      this.monitorActive = false;
-      try {
-        await this.bleClient.write(' \r');
-      } catch {
-        // The next command resets adapter state regardless.
+      if (!live()) {
+        // stopMonitoring() owns the interrupt from here.
+        break;
       }
 
-      await this.sleep(POLL_GAP_MS);
+      try {
+        await this.interruptMonitor();
+      } catch {
+        // The next command resets adapter state regardless.
+        this.monitorActive = false;
+      }
     }
 
     if (this.pollGeneration === generation) {
@@ -189,21 +257,36 @@ export class Elm327Session {
   }
 
   async stopMonitoring(): Promise<void> {
-    const wasActive = this.monitorActive || this.pollActive;
+    const wasMonitoring = this.monitorActive;
 
     this.pollActive = false;
     this.pollGeneration += 1;
-    this.monitorActive = false;
-    this.frameListener = undefined;
     this.sleepCancel?.();
+    this.frameListener = undefined;
 
-    if (wasActive) {
+    if (wasMonitoring && !this.pendingCommand) {
       try {
-        await this.bleClient.write(' \r');
+        await this.interruptMonitor();
       } catch {
         // Ignore; the adapter may already be idle.
       }
+    } else if (this.pendingCommand) {
+      // A poll-loop command (ATCRA or a monitor stop) is in flight; let it finish
+      // so the adapter is back at the prompt before anyone sends the next command.
+      const pending = this.pendingCommand;
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (this.pendingCommand !== pending) {
+            resolve();
+          } else {
+            setTimeout(check, 20);
+          }
+        };
+        check();
+      });
     }
+
+    this.monitorActive = false;
   }
 
   private handleIncomingLine(rawLine: string): void {
@@ -215,20 +298,34 @@ export class Elm327Session {
         clearTimeout(timeout);
         this.pendingCommand = null;
         resolve(lines);
+      } else if (this.monitorActive && !this.pollActive) {
+        // The adapter ended ATMA on its own (typically BUFFER FULL on a busy
+        // bus). In unfiltered mode nothing else would restart it, so resume.
+        this.bleClient.write('ATMA\r').catch(() => {
+          this.monitorActive = false;
+        });
       }
       return;
     }
 
-    if (this.pendingCommand) {
-      this.pendingCommand.lines.push(line);
+    const pending = this.pendingCommand;
+    if (pending && !pending.drainingMonitor) {
+      pending.lines.push(line);
       return;
     }
 
-    if (!this.monitorActive) {
+    if (!this.monitorActive && !pending) {
       return;
     }
 
-    const frame = parseCanFrameFromLine(line);
+    const timestamp = Date.now();
+    const frame = parseCanFrameFromLine(line, timestamp);
+    if (pending) {
+      pending.lines.push(line);
+    }
+
+    this.rawLineListener?.({ line, timestamp, frame });
+
     if (frame) {
       this.frameListener?.(frame);
     }
@@ -236,6 +333,7 @@ export class Elm327Session {
 
   async dispose(): Promise<void> {
     await this.stopMonitoring();
+    this.rawLineListener = undefined;
     this.bleClient.setLineListener(undefined);
 
     if (this.pendingCommand) {

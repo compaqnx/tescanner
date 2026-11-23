@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { VLinkerBleClient, type BleDeviceInfo } from '../lib/ble/VLinkerBleClient';
-import { Elm327Session } from '../lib/can/elm327Session';
+import { Elm327Session, type RawMonitorLine } from '../lib/can/elm327Session';
+import {
+  formatPayload,
+  type RawCanCounters,
+  type RawCanEntry,
+  type RawCanIdStat,
+} from '../lib/can/rawTraffic';
 import { describePollTargets, PollTarget, PollTargetInfo, pollTargetServes, toPollTargets } from '../lib/can/pollPlan';
 import { buildSystemSignalIndex, type SystemId } from '../lib/systems/systemCatalog';
 import type { SessionSummary } from '../lib/export/sessionStore';
@@ -66,6 +72,10 @@ export interface SignalTile extends DecodedSignal {
 
 const UI_FLUSH_INTERVAL_MS = 250;
 const LIVE_SIGNAL_CAP = 420;
+// Raw CAN view: how many recent lines to keep and how often to re-render. The
+// adapter can deliver hundreds of lines a second, so the UI never renders per line.
+const RAW_ENTRY_CAP = 100;
+const RAW_UI_FLUSH_MS = 250;
 
 // Signals used by the EV system screens are kept even when the live cache is full.
 const SYSTEM_SIGNAL_INDEX = buildSystemSignalIndex();
@@ -87,8 +97,13 @@ export function useTelemetryController() {
 
   const stopScanRef = useRef<(() => void) | null>(null);
   const latestMapRef = useRef<Map<string, SignalTile>>(new Map());
-  const recentFramesRef = useRef<CanFrame[]>([]);
   const uiFlushTimeRef = useRef(0);
+  const rawEntriesRef = useRef<RawCanEntry[]>([]);
+  const rawStatsRef = useRef<Map<number, RawCanIdStat>>(new Map());
+  const rawSeqRef = useRef(0);
+  const rawCountersRef = useRef<RawCanCounters>({ lines: 0, unparsed: 0 });
+  const frameCountRef = useRef(0);
+  const rawFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [status, setStatus] = useState<TelemetryStatus>('booting');
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +113,9 @@ export function useTelemetryController() {
   const [frameCount, setFrameCount] = useState(0);
   const [signalCount, setSignalCount] = useState(0);
   const [signals, setSignals] = useState<SignalTile[]>([]);
-  const [recentRawFrames, setRecentRawFrames] = useState<string[]>([]);
+  const [recentRawFrames, setRecentRawFrames] = useState<RawCanEntry[]>([]);
+  const [rawIdStats, setRawIdStats] = useState<RawCanIdStat[]>([]);
+  const [rawCounters, setRawCounters] = useState<RawCanCounters>({ lines: 0, unparsed: 0 });
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [lastExportUri, setLastExportUri] = useState<string | null>(null);
@@ -149,21 +166,85 @@ export function useTelemetryController() {
 
   const clearLiveSignalCache = useCallback((resetCounters: boolean) => {
     latestMapRef.current.clear();
-    recentFramesRef.current = [];
+    rawEntriesRef.current = [];
+    rawStatsRef.current.clear();
+    rawCountersRef.current = { lines: 0, unparsed: 0 };
+    if (rawFlushTimerRef.current) {
+      clearTimeout(rawFlushTimerRef.current);
+      rawFlushTimerRef.current = null;
+    }
 
     setSignals([]);
     setRecentRawFrames([]);
+    setRawIdStats([]);
+    setRawCounters({ lines: 0, unparsed: 0 });
 
     if (resetCounters) {
+      frameCountRef.current = 0;
       setFrameCount(0);
       setSignalCount(0);
     }
   }, []);
 
-  const pushFrameForUi = useCallback(() => {
-    const next = recentFramesRef.current.map((frame) => frame.rawLine).slice(0, 24);
-    setRecentRawFrames(next);
+  const flushRawUi = useCallback(() => {
+    rawFlushTimerRef.current = null;
+    setRecentRawFrames(rawEntriesRef.current.slice());
+    setRawIdStats(Array.from(rawStatsRef.current.values()).sort((a, b) => a.id - b.id));
+    setRawCounters({ ...rawCountersRef.current });
+    setFrameCount(frameCountRef.current);
   }, []);
+
+  const scheduleRawFlush = useCallback(() => {
+    if (!rawFlushTimerRef.current) {
+      rawFlushTimerRef.current = setTimeout(flushRawUi, RAW_UI_FLUSH_MS);
+    }
+  }, [flushRawUi]);
+
+  /**
+   * Every line the adapter sends while monitoring — parsed frames and adapter
+   * messages (BUFFER FULL, ?, CAN ERROR, ...) alike — so the Raw CAN view shows
+   * what is really on the wire even when nothing decodes.
+   */
+  const handleRawLine = useCallback(
+    ({ line, timestamp, frame }: RawMonitorLine) => {
+      const dbc = dbcRef.current;
+      const dataHex = frame ? formatPayload(frame.data) : null;
+      const messageName = frame ? (dbc?.messages[frame.id]?.name ?? null) : null;
+
+      rawSeqRef.current += 1;
+      const entries = rawEntriesRef.current;
+      entries.unshift({
+        seq: rawSeqRef.current,
+        timestamp,
+        line,
+        id: frame?.id ?? null,
+        dataHex,
+        messageName,
+      });
+      if (entries.length > RAW_ENTRY_CAP) {
+        entries.length = RAW_ENTRY_CAP;
+      }
+
+      const counters = rawCountersRef.current;
+      counters.lines += 1;
+      if (!frame) {
+        counters.unparsed += 1;
+      } else if (dataHex !== null) {
+        const previous = rawStatsRef.current.get(frame.id);
+        rawStatsRef.current.set(frame.id, {
+          id: frame.id,
+          count: (previous?.count ?? 0) + 1,
+          lastDataHex: dataHex,
+          lastAt: timestamp,
+          changed: previous ? previous.lastDataHex !== dataHex : false,
+          messageName,
+        });
+      }
+
+      scheduleRawFlush();
+    },
+    [scheduleRawFlush],
+  );
 
   const flushUiSignals = useCallback(() => {
     const ordered = Array.from(latestMapRef.current.values()).sort((a, b) => {
@@ -361,6 +442,7 @@ export function useTelemetryController() {
         });
 
         const elm = new Elm327Session(ble);
+        elm.setRawLineListener(handleRawLine);
         await elm.initializeAdapter();
 
         elmRef.current = elm;
@@ -374,7 +456,7 @@ export function useTelemetryController() {
         setStatus('error');
       }
     },
-    [appendLog, stopScan],
+    [appendLog, handleRawLine, stopScan],
   );
 
   /**
@@ -430,10 +512,9 @@ export function useTelemetryController() {
 
     const onFrame = (frame: CanFrame) => {
       const processFrame = async () => {
-        setFrameCount((current) => current + 1);
-
-        recentFramesRef.current = [frame, ...recentFramesRef.current].slice(0, 24);
-        pushFrameForUi();
+        // Counted here, rendered by the throttled raw-traffic flush.
+        frameCountRef.current += 1;
+        scheduleRawFlush();
 
         await store.appendFrame(frame);
 
@@ -464,7 +545,7 @@ export function useTelemetryController() {
     disabledPollIds,
     handleDecodedSignals,
     pollCatalog,
-    pushFrameForUi,
+    scheduleRawFlush,
     selectedVehicleProfile,
   ]);
 
@@ -669,6 +750,11 @@ export function useTelemetryController() {
     return () => {
       mounted = false;
 
+      if (rawFlushTimerRef.current) {
+        clearTimeout(rawFlushTimerRef.current);
+        rawFlushTimerRef.current = null;
+      }
+
       stopScanRef.current?.();
       stopScanRef.current = null;
 
@@ -702,6 +788,8 @@ export function useTelemetryController() {
     activeSessionId,
     lastExportUri,
     recentRawFrames,
+    rawIdStats,
+    rawCounters,
     vehicleProfiles: VEHICLE_PROFILES,
     selectedVehicleProfileId,
     selectedVehicleProfileName: selectedVehicleProfile.name,

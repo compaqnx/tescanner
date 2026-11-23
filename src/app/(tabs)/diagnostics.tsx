@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { formatCanId } from '../../lib/can/rawTraffic';
 import { localizeTelemetryError } from '../../lib/i18n/localization';
 import { labelFor } from '../../lib/systems/readSignals';
 import { SYSTEM_BY_ID } from '../../lib/systems/systemCatalog';
@@ -16,7 +17,7 @@ const QUICK_COMMANDS = ['ATI', 'ATRV', 'ATDP', 'STI', 'ATCS'];
 
 export default function DiagnosticsScreen() {
   const app = useApp();
-  const { t, locale, alerts, storedErrors, recentRawFrames, signals, isConnected, isStreaming } = app;
+  const { t, locale, alerts, storedErrors, signals, isConnected, isStreaming } = app;
   const [tab, setTab] = useState<Tab>('alerts');
 
   return (
@@ -90,26 +91,108 @@ export default function DiagnosticsScreen() {
         </Card>
       ) : null}
 
-      {tab === 'raw' ? (
-        <Card title={t('sectionRawCan')} icon="barcode-scan">
-          {recentRawFrames.length === 0 ? (
-            <EmptyState text={t('waitingTraffic')} />
-          ) : (
-            <View style={styles.terminal}>
-              {recentRawFrames.map((line, index) => (
-                <Text key={`${line}-${index}`} style={styles.mono}>
-                  {line}
-                </Text>
-              ))}
-            </View>
-          )}
-        </Card>
-      ) : null}
+      {tab === 'raw' ? <RawCanPanel isStreaming={isStreaming} /> : null}
 
       {tab === 'console' ? <ConsolePanel isConnected={isConnected} isStreaming={isStreaming} /> : null}
 
       {tab === 'explorer' ? <ExplorerPanel signals={signals} /> : null}
     </Screen>
+  );
+}
+
+type RawView = 'lines' | 'ids';
+
+function formatClock(timestamp: number): string {
+  const date = new Date(timestamp);
+  const pad = (value: number, width = 2) => String(value).padStart(width, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+}
+
+function shortMessageName(name: string | null): string {
+  // DBC names look like "ID3D2TotalChargeDischarge"; the id is shown separately.
+  return name ? name.replace(/^ID[0-9A-F]{3}/, '') || name : '';
+}
+
+/**
+ * Raw adapter traffic: every line received while streaming (frames and adapter
+ * messages such as BUFFER FULL or ?), plus a per-id summary with message names
+ * from the loaded DBC. Adapter messages are highlighted so a stream that
+ * receives data but decodes nothing is easy to diagnose.
+ */
+function RawCanPanel({ isStreaming }: { isStreaming: boolean }) {
+  const { t, recentRawFrames, rawIdStats, rawCounters, frameCount } = useApp();
+  const [view, setView] = useState<RawView>('lines');
+
+  const hasLines = recentRawFrames.length > 0;
+  const noFrames = rawCounters.lines > 0 && rawIdStats.length === 0;
+
+  return (
+    <Card title={t('sectionRawCan')} icon="barcode-scan">
+      <Segmented<RawView>
+        value={view}
+        onChange={setView}
+        options={[
+          { value: 'lines', label: t('rawViewLines'), icon: 'format-list-text' },
+          { value: 'ids', label: t('rawViewIds'), icon: 'identifier', badge: rawIdStats.length },
+        ]}
+      />
+
+      {rawCounters.lines > 0 ? (
+        <Text style={styles.rowMeta}>
+          {t('rawStats', {
+            lines: rawCounters.lines,
+            frames: frameCount,
+            ids: rawIdStats.length,
+            unparsed: rawCounters.unparsed,
+          })}
+        </Text>
+      ) : null}
+
+      {noFrames ? <Hint>{t('rawNoFramesHint')}</Hint> : null}
+
+      {!hasLines ? (
+        <EmptyState text={isStreaming ? t('waitingTraffic') : t('rawIdleHint')} />
+      ) : view === 'lines' ? (
+        <View style={styles.terminal}>
+          {recentRawFrames.map((entry) =>
+            entry.id === null ? (
+              <Text key={entry.seq} style={styles.monoWarn} numberOfLines={1}>
+                {formatClock(entry.timestamp)}  {entry.line}  · {t('rawNotFrame')}
+              </Text>
+            ) : (
+              <Text key={entry.seq} style={styles.mono} numberOfLines={1}>
+                <Text style={styles.monoDim}>{formatClock(entry.timestamp)}  </Text>
+                <Text style={styles.monoId}>{formatCanId(entry.id)}</Text>
+                {'  '}
+                {entry.dataHex}
+                {entry.messageName ? <Text style={styles.monoDim}>  {shortMessageName(entry.messageName)}</Text> : null}
+              </Text>
+            ),
+          )}
+        </View>
+      ) : rawIdStats.length === 0 ? (
+        <EmptyState text={t('waitingTraffic')} />
+      ) : (
+        <View style={styles.terminal}>
+          {rawIdStats.map((stat) => (
+            <View key={stat.id} style={styles.rawIdRow}>
+              <Text style={styles.monoId}>{formatCanId(stat.id)}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={stat.changed ? styles.monoChanged : styles.mono} numberOfLines={1}>
+                  {stat.lastDataHex}
+                </Text>
+                {stat.messageName ? (
+                  <Text style={styles.monoDim} numberOfLines={1}>
+                    {shortMessageName(stat.messageName)}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={styles.monoDim}>{t('rawIdCount', { count: stat.count })}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </Card>
   );
 }
 
@@ -240,6 +323,11 @@ const styles = StyleSheet.create({
   alertValue: { color: colors.danger, fontFamily: fonts.heading, fontSize: 15 },
   terminal: { backgroundColor: '#0A0B0B', borderRadius: radius.md, padding: spacing.sm, gap: 2 },
   mono: { color: '#B8E0D2', fontFamily: fonts.mono, fontSize: 11 },
+  monoDim: { color: colors.textDim, fontFamily: fonts.mono, fontSize: 10 },
+  monoId: { color: colors.info, fontFamily: fonts.mono, fontSize: 11 },
+  monoWarn: { color: colors.warn, fontFamily: fonts.mono, fontSize: 11 },
+  monoChanged: { color: colors.neon, fontFamily: fonts.mono, fontSize: 11 },
+  rawIdRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 2 },
   scope: {
     flexDirection: 'row',
     gap: spacing.sm,
