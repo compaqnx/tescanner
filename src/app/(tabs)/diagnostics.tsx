@@ -8,7 +8,7 @@ import { labelFor } from '../../lib/systems/readSignals';
 import { SYSTEM_BY_ID } from '../../lib/systems/systemCatalog';
 import { useApp } from '../../state/AppContext';
 import { Button, ButtonRow, Card, EmptyState, Hint, Screen, Segmented } from '../../ui/components';
-import { colors, fonts, radius, spacing, TOUCH_TARGET } from '../../ui/theme';
+import { colors, fonts, radius, spacing, TOUCH_TARGET, themed } from '../../ui/theme';
 
 type Tab = 'alerts' | 'events' | 'raw' | 'console' | 'explorer';
 
@@ -306,7 +306,8 @@ function ExplorerPanel({ signals }: { signals: ReturnType<typeof useApp>['signal
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -350,4 +351,5 @@ const styles = StyleSheet.create({
     fontFamily: fonts.mono,
     fontSize: 14,
   },
-});
+  }),
+);

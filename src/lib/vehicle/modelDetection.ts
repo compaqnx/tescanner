@@ -6,8 +6,15 @@ export type TeslaModelKey = 'model3' | 'modely' | 'models' | 'modelx';
 export interface DetectedTeslaModel {
   key: TeslaModelKey;
   nameKey: TranslationKey;
-  source: 'fallback' | 'profile' | 'device-name' | 'signal';
+  source: 'fallback' | 'profile' | 'device-name' | 'signal' | 'vin';
 }
+
+const NAME_KEY_BY_MODEL: Record<TeslaModelKey, TranslationKey> = {
+  model3: 'modelNameModel3',
+  modely: 'modelNameModelY',
+  models: 'modelNameModelS',
+  modelx: 'modelNameModelX',
+};
 
 export const TESLA_MODEL_IMAGES: Record<TeslaModelKey, number> = {
   model3: require('../../../assets/vehicles/tesla_model3.png'),
@@ -21,7 +28,13 @@ export function detectTeslaModel(
   selectedProfileId: string,
   selectedDeviceName: string | null,
   signalIndex: SignalIndex,
+  /** Exact model read from the car's VIN at connect time, when available. */
+  vinModel: TeslaModelKey | null = null,
 ): DetectedTeslaModel {
+  if (vinModel) {
+    return { key: vinModel, nameKey: NAME_KEY_BY_MODEL[vinModel], source: 'vin' };
+  }
+
   if (!connected) {
     return selectedProfileId.startsWith('modelsx')
       ? { key: 'models', nameKey: 'modelNameModelSx', source: 'profile' }

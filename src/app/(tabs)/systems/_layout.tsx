@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import { useApp } from '../../../state/AppContext';
 import { colors } from '../../../ui/theme';
 
 // Deep links such as /systems/ess (from Live or Diagnose) still get the hub
@@ -8,5 +9,7 @@ export const unstable_settings = {
 };
 
 export default function SystemsLayout() {
+  // Subscribed so the stack background follows a theme switch.
+  useApp();
   return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />;
 }

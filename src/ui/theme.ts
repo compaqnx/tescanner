@@ -1,10 +1,33 @@
-import { Platform } from 'react-native';
+import { Appearance, Platform } from 'react-native';
+import { loadThemeMode, type ThemeMode } from '../lib/settings/settingsStore';
+
+export type ColorScheme = 'dark' | 'light';
+
+export interface Palette {
+  bg: string;
+  surface: string;
+  surfaceRaised: string;
+  border: string;
+  borderStrong: string;
+  text: string;
+  textMuted: string;
+  textDim: string;
+  neon: string;
+  onNeon: string;
+  live: string;
+  info: string;
+  warn: string;
+  danger: string;
+  dangerBg: string;
+  regen: string;
+  drive: string;
+}
 
 /**
  * Dark, high-contrast palette tuned for in-car use: large glanceable numbers,
  * one accent for "live" state and distinct colours for warnings.
  */
-export const colors = {
+const DARK: Palette = {
   bg: '#0E0F10',
   surface: '#16191A',
   surfaceRaised: '#1D2122',
@@ -22,7 +45,95 @@ export const colors = {
   dangerBg: '#3A1717',
   regen: '#20D69A',
   drive: '#C7FF19',
-} as const;
+};
+
+/**
+ * Light palette for daylight use. Accents are darkened so they keep at least
+ * 4.5:1 contrast as text on white (the dark theme's lime would not).
+ */
+const LIGHT: Palette = {
+  bg: '#F3F5F4',
+  surface: '#FFFFFF',
+  surfaceRaised: '#ECEFEE',
+  border: '#D8DDDB',
+  borderStrong: '#BFC7C4',
+  text: '#121616',
+  textMuted: '#4F5A58',
+  textDim: '#6B7775',
+  neon: '#4F7300',
+  onNeon: '#FFFFFF',
+  live: '#0B7F57',
+  info: '#1765C0',
+  warn: '#9A5B00',
+  danger: '#C62E2E',
+  dangerBg: '#FBE3E3',
+  regen: '#0B7F57',
+  drive: '#4F7300',
+};
+
+const PALETTES: Record<ColorScheme, Palette> = { dark: DARK, light: LIGHT };
+
+export function resolveColorScheme(mode: ThemeMode, systemScheme: string | null | undefined): ColorScheme {
+  if (mode === 'system') {
+    return systemScheme === 'light' ? 'light' : 'dark';
+  }
+  return mode;
+}
+
+let activeScheme: ColorScheme = resolveColorScheme(loadThemeMode(), Appearance.getColorScheme());
+let themeVersion = 0;
+
+/**
+ * The live palette. Screens read `colors.x` while rendering, so it is mutated in
+ * place on a theme switch (see applyColorScheme) and the next render picks up
+ * the new values without every import having to change.
+ */
+export const colors: Palette = { ...PALETTES[activeScheme] };
+
+export function getColorScheme(): ColorScheme {
+  return activeScheme;
+}
+
+/**
+ * Switches the live palette. Called by the app provider during render, before
+ * any screen renders, so a single re-render repaints everything.
+ */
+export function applyColorScheme(scheme: ColorScheme): void {
+  if (scheme === activeScheme) {
+    return;
+  }
+  activeScheme = scheme;
+  Object.assign(colors, PALETTES[scheme]);
+  themeVersion += 1;
+}
+
+/**
+ * Wraps a module-level style sheet so it is rebuilt from the current palette
+ * after a theme switch: `const styles = themed(() => StyleSheet.create({...}))`.
+ * The factory runs lazily on first access and again once per theme change.
+ */
+export function themed<T extends object>(factory: () => T): T {
+  let cache: T | null = null;
+  let builtFor = -1;
+
+  const current = (): T => {
+    if (cache === null || builtFor !== themeVersion) {
+      cache = factory();
+      builtFor = themeVersion;
+    }
+    return cache;
+  };
+
+  return new Proxy({} as T, {
+    get: (_target, property) => Reflect.get(current(), property),
+    has: (_target, property) => Reflect.has(current(), property),
+    ownKeys: () => Reflect.ownKeys(current()),
+    getOwnPropertyDescriptor: (_target, property) => {
+      const descriptor = Reflect.getOwnPropertyDescriptor(current(), property);
+      return descriptor ? { ...descriptor, configurable: true } : undefined;
+    },
+  });
+}
 
 export const spacing = {
   xs: 4,

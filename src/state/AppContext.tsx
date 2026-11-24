@@ -1,6 +1,8 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, useColorScheme } from 'react-native';
 import { LocaleCode, localizeTelemetryError, TranslationKey, translate } from '../lib/i18n/localization';
+import { loadThemeMode, saveThemeMode, type ThemeMode } from '../lib/settings/settingsStore';
+import { applyColorScheme, resolveColorScheme, type ColorScheme } from '../ui/theme';
 import {
   buildSignalIndex,
   computeAlerts,
@@ -32,6 +34,11 @@ export interface AppContextValue extends Omit<Controller, 'startStreaming'> {
   startStreaming: () => Promise<void>;
   locale: LocaleCode;
   setLocale: (locale: LocaleCode) => void;
+  /** User preference: follow the OS, or force dark / light. Persisted. */
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+  /** The scheme actually in use after resolving 'system'. */
+  colorScheme: ColorScheme;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   localizedError: string | null;
   storedErrors: StoredError[];
@@ -57,6 +64,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { error, status, signals, frameCount, exportLatestSession, exportSession } = controller;
 
   const [locale, setLocale] = useState<LocaleCode>('en');
+
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(loadThemeMode);
+  const systemScheme = useColorScheme();
+  const colorScheme = resolveColorScheme(themeMode, systemScheme);
+  // Switch the shared palette during render, before any child renders, so this
+  // one render pass repaints every screen (styles rebuild lazily via themed()).
+  applyColorScheme(colorScheme);
+  const setThemeMode = useCallback((mode: ThemeMode) => {
+    saveThemeMode(mode);
+    setThemeModeState(mode);
+  }, []);
   const [storedErrors, setStoredErrors] = useState<StoredError[]>([]);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [framesPerSecond, setFramesPerSecond] = useState(0);
@@ -155,6 +173,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     startStreaming,
     locale,
     setLocale,
+    themeMode,
+    setThemeMode,
+    colorScheme,
     t,
     localizedError,
     storedErrors,

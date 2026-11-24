@@ -8,12 +8,11 @@ import { SYSTEM_BY_ID, SYSTEMS } from '../../lib/systems/systemCatalog';
 import { useApp } from '../../state/AppContext';
 import { Button, ButtonRow, Card, EmptyState, Hint, Pill, Screen, Segmented, tileWidth, useColumns } from '../../ui/components';
 import type { IconName } from '../../ui/icons';
-import { colors, fonts, radius, spacing, TOUCH_TARGET } from '../../ui/theme';
+import { colors, fonts, radius, spacing, TOUCH_TARGET, themed } from '../../ui/theme';
 
 const PROFILE_KEYS: Record<string, { name: TranslationKey; desc: TranslationKey }> = {
   model3y: { name: 'profileModel3yName', desc: 'profileModel3yDesc' },
-  modelsx_powertrain: { name: 'profileModelsxPtName', desc: 'profileModelsxPtDesc' },
-  modelsx_2015_2021: { name: 'profileModelsxName', desc: 'profileModelsxDesc' },
+  modelsx: { name: 'profileModelsxName', desc: 'profileModelsxDesc' },
 };
 
 export default function SetupScreen() {
@@ -160,6 +159,17 @@ export default function SetupScreen() {
 
       {/* 2. Vehicle profile decides which DBC is used. */}
       <Card title={t('setupVehicle')} icon="car-info" subtitle={isConnected ? t('errSwitchProfileIdle') : undefined}>
+        {app.detectedVehicle ? (
+          <Hint>
+            {app.detectedVehicle.vin
+              ? t('vehicleDetectedVin', { vin: app.detectedVehicle.vin })
+              : app.detectedVehicle.profileId
+                ? t('vehicleDetectedTraffic', { count: app.detectedVehicle.idCount })
+                : t('vehicleNotDetected')}
+          </Hint>
+        ) : (
+          <Hint>{t('vehicleAutoDetectHint')}</Hint>
+        )}
         <View style={styles.profileGrid}>
           {app.vehicleProfiles.map((profile) => {
             const selected = profile.id === app.selectedVehicleProfileId;
@@ -305,6 +315,16 @@ export default function SetupScreen() {
             { value: 'ro', label: 'Română' },
           ]}
         />
+        <Text style={styles.subLabel}>{t('themeLabel')}</Text>
+        <Segmented<'system' | 'dark' | 'light'>
+          value={app.themeMode}
+          onChange={app.setThemeMode}
+          options={[
+            { value: 'system', label: t('themeSystem'), icon: 'theme-light-dark' },
+            { value: 'dark', label: t('themeDark'), icon: 'weather-night' },
+            { value: 'light', label: t('themeLight'), icon: 'white-balance-sunny' },
+          ]}
+        />
       </Card>
 
       {/* 5. Honest capability statement (read / calculate / write). */}
@@ -326,7 +346,8 @@ function Capability({ icon, color, text }: { icon: IconName; color: string; text
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() =>
+  StyleSheet.create({
   deviceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -384,4 +405,5 @@ const styles = StyleSheet.create({
   logLine: { color: colors.textMuted, fontFamily: fonts.mono, fontSize: 11, lineHeight: 15 },
   capRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
   capText: { color: colors.text, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, flex: 1 },
-});
+  }),
+);

@@ -18,7 +18,7 @@ import { SignalReading, STALE_AFTER_MS, labelFor } from '../lib/systems/readSign
 import type { TelemetryStatus } from '../state/useTelemetryController';
 import { useApp } from '../state/AppContext';
 import type { IconName } from './icons';
-import { colors, fonts, radius, spacing, TOUCH_TARGET } from './theme';
+import { colors, fonts, getColorScheme, radius, spacing, TOUCH_TARGET, themed } from './theme';
 
 /* ------------------------------------------------------------------ layout */
 
@@ -86,14 +86,15 @@ export function Screen({ title, subtitle, back, right, children, scroll = true }
 
 /* ---------------------------------------------------------- connection bar */
 
-const STATUS_COLOR: Record<TelemetryStatus, string> = {
-  booting: colors.warn,
-  idle: colors.textDim,
-  scanning: colors.info,
-  connecting: colors.info,
-  connected: colors.info,
-  streaming: colors.live,
-  error: colors.danger,
+// Resolved at render time so a theme switch applies (the palette is mutated in place).
+const STATUS_COLOR_KEY: Record<TelemetryStatus, keyof typeof colors> = {
+  booting: 'warn',
+  idle: 'textDim',
+  scanning: 'info',
+  connecting: 'info',
+  connected: 'info',
+  streaming: 'live',
+  error: 'danger',
 };
 
 const STATUS_KEY: Record<TelemetryStatus, TranslationKey> = {
@@ -151,7 +152,7 @@ export function ConnectionBar() {
     localizedError,
   } = useApp();
   const elapsed = useElapsed(isStreaming ? streamStartedAt : null);
-  const color = STATUS_COLOR[status];
+  const color = colors[STATUS_COLOR_KEY[status]];
 
   let action: ReactNode = null;
   if (isStreaming) {
@@ -494,7 +495,8 @@ export function Pill({ text, color = colors.textMuted }: { text: string; color?:
 
 /* ------------------------------------------------------------------ styles */
 
-const styles = StyleSheet.create({
+const styles = themed(() =>
+  StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
   screenBody: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl * 2 },
   header: {
@@ -543,7 +545,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  errorText: { color: '#FFD6D6', fontFamily: fonts.body, fontSize: 12, flex: 1 },
+  errorText: { color: getColorScheme() === 'light' ? colors.danger : '#FFD6D6', fontFamily: fonts.body, fontSize: 12, flex: 1 },
 
   button: {
     minHeight: TOUCH_TARGET,
@@ -585,7 +587,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { color: '#1A0A0A', fontFamily: fonts.heading, fontSize: 11 },
+  badgeText: { color: getColorScheme() === 'light' ? '#FFFFFF' : '#1A0A0A', fontFamily: fonts.heading, fontSize: 11 },
 
   card: {
     backgroundColor: colors.surface,
@@ -638,11 +640,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    backgroundColor: '#1E2A22',
+    backgroundColor: getColorScheme() === 'light' ? '#DDF3EA' : '#1E2A22',
   },
-  accessBadgeCalc: { backgroundColor: '#2A2440' },
+  accessBadgeCalc: { backgroundColor: getColorScheme() === 'light' ? '#ECE7FB' : '#2A2440' },
   accessText: { color: colors.live, fontFamily: fonts.heading, fontSize: 9, letterSpacing: 0.6 },
-  accessTextCalc: { color: '#B39DFF' },
+  accessTextCalc: { color: getColorScheme() === 'light' ? '#5B3FC4' : '#B39DFF' },
   signalRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -663,4 +665,5 @@ const styles = StyleSheet.create({
 
   pill: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2 },
   pillText: { fontFamily: fonts.heading, fontSize: 11, letterSpacing: 0.4 },
-});
+  }),
+);

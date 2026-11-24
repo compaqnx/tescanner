@@ -1,4 +1,4 @@
-export type VehicleProfileId = 'model3y' | 'modelsx_powertrain' | 'modelsx_2015_2021';
+export type VehicleProfileId = 'model3y' | 'modelsx';
 
 export interface CanonicalSignalAlias {
   canonicalName: string;
@@ -105,51 +105,16 @@ const MODEL3Y_ALIASES: CanonicalSignalAlias[] = [
   },
 ];
 
-const MODELSX_2015_2021_ALIASES: CanonicalSignalAlias[] = [
-  {
-    canonicalName: 'vehicleSpeed',
-    label: 'Vehicle Speed',
-    aliases: ['DI_vehicleSpeed', 'ESP_vehicleSpeed', 'DI_digitalSpeed', 'DI_analogSpeed', 'UI_TCR_vehSpeed'],
-  },
-  {
-    canonicalName: 'gear',
-    label: 'Gear',
-    aliases: ['DI_gear', 'DI_gearRequest'],
-  },
-  {
-    canonicalName: 'regenIndicator',
-    label: 'Regen Indicator',
-    aliases: ['DI_regenLight'],
-  },
-  {
-    canonicalName: 'cruiseSetSpeed',
-    label: 'Cruise Set Speed',
-    aliases: ['DI_cruiseSet', 'DAS_setSpeed', 'DAS_locSpeed', 'DAS_accSpeedLimit'],
-  },
-  {
-    canonicalName: 'speedLimit',
-    label: 'Speed Limit',
-    aliases: ['UI_mapSpeedLimit', 'UI_mppSpeedLimit', 'DAS_fusedSpeedLimit', 'DAS_visionOnlySpeedLimit'],
-  },
-  {
-    canonicalName: 'tegraCoreTemp',
-    label: 'MCU Core Temp',
-    aliases: ['UI_tegraCoreTemperature'],
-  },
-  {
-    canonicalName: 'tegraAmbientTemp',
-    label: 'MCU Ambient Temp',
-    aliases: ['UI_tegraAmbientTemperature'],
-  },
-];
-
 /**
- * Legacy Model S/X powertrain bus (the bus the Scan My Tesla S/X harness taps):
- * battery, cells, drive units, DC-DC and thermal from TeslaSx_powertrain_battery.dbc,
- * plus drive basics from openDBC tesla_powertrain.dbc.
+ * Legacy Model S/X (2012-2021, pre-Palladium) — one profile for both buses the
+ * adapter may see: the powertrain bus (battery, cells, drive units, DC-DC,
+ * thermal; what a Scan My Tesla-style S/X harness taps) and the chassis bus
+ * (driver assist, cruise, speed limits, MCU temps). DBC order matters where the
+ * two buses reuse an id: the powertrain definitions come first and win.
  */
-const MODELSX_POWERTRAIN_ALIASES: CanonicalSignalAlias[] = [
-  { canonicalName: 'vehicleSpeed', label: 'Vehicle Speed', aliases: ['SX_vehicleSpeedKph'] },
+const MODELSX_ALIASES: CanonicalSignalAlias[] = [
+  // km/h sources only, so the speed tile never flips between MPH and km/h.
+  { canonicalName: 'vehicleSpeed', label: 'Vehicle Speed', aliases: ['SX_vehicleSpeedKph', 'ESP_vehicleSpeed'] },
   { canonicalName: 'gear', label: 'Gear', aliases: ['DI_gear'] },
   { canonicalName: 'batterySocUi', label: 'Battery SoC (UI)', aliases: ['SX_socUi'] },
   { canonicalName: 'packVoltage', label: 'Pack Voltage', aliases: ['SX_packVoltage'] },
@@ -160,6 +125,19 @@ const MODELSX_POWERTRAIN_ALIASES: CanonicalSignalAlias[] = [
   { canonicalName: 'maxRegenPower', label: 'Max Regen Power', aliases: ['SX_maxRegenPower'] },
   { canonicalName: 'outsideTemp', label: 'Outside Temp', aliases: ['SX_outsideTemp'] },
   { canonicalName: 'driveTorque', label: 'Torque', aliases: ['SX_rearTorqueMeasured'] },
+  { canonicalName: 'regenIndicator', label: 'Regen Indicator', aliases: ['DI_regenLight'] },
+  {
+    canonicalName: 'cruiseSetSpeed',
+    label: 'Cruise Set Speed',
+    aliases: ['DI_cruiseSet', 'DAS_setSpeed', 'DAS_locSpeed', 'DAS_accSpeedLimit'],
+  },
+  {
+    canonicalName: 'speedLimit',
+    label: 'Speed Limit',
+    aliases: ['UI_mapSpeedLimit', 'UI_mppSpeedLimit', 'DAS_fusedSpeedLimit', 'DAS_visionOnlySpeedLimit'],
+  },
+  { canonicalName: 'tegraCoreTemp', label: 'MCU Core Temp', aliases: ['UI_tegraCoreTemperature'] },
+  { canonicalName: 'tegraAmbientTemp', label: 'MCU Ambient Temp', aliases: ['UI_tegraAmbientTemperature'] },
 ];
 
 export const VEHICLE_PROFILES: VehicleProfileDefinition[] = [
@@ -192,15 +170,16 @@ export const VEHICLE_PROFILES: VehicleProfileDefinition[] = [
     aliases: MODEL3Y_ALIASES,
   },
   {
-    id: 'modelsx_powertrain',
-    name: 'Model S / X – battery & powertrain',
+    id: 'modelsx',
+    name: 'Model S / X',
     description:
-      'Legacy Model S/X (2012-2021) powertrain bus: pack, 96 cells, drive units, DC-DC, thermal. Use with a Scan My Tesla-style S/X harness.',
+      'Legacy Model S/X (2012-2021): battery & powertrain (pack, cells, drive units, DC-DC, thermal) plus chassis & driver assist (cruise, speed limits, MCU temps).',
     dbcAssets: [
       require('../../../assets/can/TeslaSx_powertrain_battery.dbc'),
       require('../../../assets/can/TeslaSx_tesla_powertrain.dbc'),
+      require('../../../assets/can/TeslaSx_tesla_can.dbc'),
     ],
-    watchSignals: MODELSX_POWERTRAIN_ALIASES.map((entry) => entry.canonicalName),
+    watchSignals: MODELSX_ALIASES.map((entry) => entry.canonicalName),
     dashboardPrimaryMetrics: ['vehicleSpeed', 'batterySocUi', 'packVoltage', 'packCurrent'],
     dashboardSecondaryMetrics: [
       'gear',
@@ -210,29 +189,28 @@ export const VEHICLE_PROFILES: VehicleProfileDefinition[] = [
       'maxRegenPower',
       'outsideTemp',
       'driveTorque',
-    ],
-    aliases: MODELSX_POWERTRAIN_ALIASES,
-  },
-  {
-    id: 'modelsx_2015_2021',
-    name: 'Model S / X – chassis & driver assist',
-    description: 'Legacy Model S and X chassis bus using openDBC tesla_can + tesla_powertrain.',
-    dbcAssets: [
-      require('../../../assets/can/TeslaSx_tesla_can.dbc'),
-      require('../../../assets/can/TeslaSx_tesla_powertrain.dbc'),
-    ],
-    watchSignals: MODELSX_2015_2021_ALIASES.map((entry) => entry.canonicalName),
-    dashboardPrimaryMetrics: [
-      'vehicleSpeed',
-      'gear',
       'cruiseSetSpeed',
       'speedLimit',
-      'regenIndicator',
     ],
-    dashboardSecondaryMetrics: ['tegraCoreTemp', 'tegraAmbientTemp'],
-    aliases: MODELSX_2015_2021_ALIASES,
+    aliases: MODELSX_ALIASES,
   },
 ];
+
+/** Profile ids from earlier versions, mapped onto the current ones. */
+const LEGACY_PROFILE_IDS: Record<string, VehicleProfileId> = {
+  modelsx_powertrain: 'modelsx',
+  modelsx_2015_2021: 'modelsx',
+};
+
+export function normalizeProfileId(id: string | null | undefined): VehicleProfileId | null {
+  if (!id) {
+    return null;
+  }
+  if (id === 'model3y' || id === 'modelsx') {
+    return id;
+  }
+  return LEGACY_PROFILE_IDS[id] ?? null;
+}
 
 export const DEFAULT_VEHICLE_PROFILE_ID: VehicleProfileId = 'model3y';
 

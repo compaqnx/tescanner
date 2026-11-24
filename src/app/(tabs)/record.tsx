@@ -14,7 +14,7 @@ import {
   useColumns,
   useElapsed,
 } from '../../ui/components';
-import { colors, fonts, spacing, TOUCH_TARGET } from '../../ui/theme';
+import { colors, fonts, spacing, TOUCH_TARGET, themed } from '../../ui/theme';
 
 function formatDuration(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000));
@@ -131,7 +131,8 @@ export default function RecordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() =>
+  StyleSheet.create({
   recordHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, justifyContent: 'center' },
   recDot: { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.textDim },
   recDotLive: { backgroundColor: colors.danger },
@@ -147,4 +148,5 @@ const styles = StyleSheet.create({
   },
   sessionTitle: { color: colors.text, fontFamily: fonts.heading, fontSize: 14 },
   sessionMeta: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 },
-});
+  }),
+);

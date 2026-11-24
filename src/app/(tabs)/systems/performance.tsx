@@ -15,7 +15,7 @@ import {
   tileWidth,
   useColumns,
 } from '../../../ui/components';
-import { colors, fonts, spacing } from '../../../ui/theme';
+import { colors, fonts, spacing, themed } from '../../../ui/theme';
 
 type Phase = 'idle' | 'armed' | 'running' | 'done';
 
@@ -153,9 +153,11 @@ export default function PerformanceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() =>
+  StyleSheet.create({
   status: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.md },
   phase: { color: colors.textMuted, fontFamily: fonts.heading, fontSize: 16, flex: 1 },
   speed: { color: colors.text, fontFamily: fonts.heading, fontSize: 40 },
   unit: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 14 },
-});
+  }),
+);

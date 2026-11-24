@@ -6,12 +6,13 @@ import { labelFor } from '../../../lib/systems/readSignals';
 import { SYSTEMS } from '../../../lib/systems/systemCatalog';
 import { useApp } from '../../../state/AppContext';
 import { Grid, Hint, Pill, Screen, tileWidth, useColumns } from '../../../ui/components';
-import { colors, fonts, radius, spacing } from '../../../ui/theme';
+import { colors, fonts, radius, spacing, themed } from '../../../ui/theme';
 
 export default function SystemsHub() {
   const { t, locale, systemSummaries, pollCatalog, disabledPollIds, canFilterEnabled } = useApp();
-  const { columns, width } = useColumns(320, 3);
-  const cardWidth = tileWidth(Math.min(columns, 3), width);
+  // One system per line: the cards carry several KPIs each and read better full width.
+  const { width } = useColumns(320, 1);
+  const cardWidth = tileWidth(1, width);
 
   return (
     <Screen title={t('systemsTitle')} subtitle={t('accessReadOnly')}>
@@ -79,7 +80,8 @@ export default function SystemsHub() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() =>
+  StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -100,4 +102,5 @@ const styles = StyleSheet.create({
   kpiValue: { color: colors.text, fontFamily: fonts.heading, fontSize: 18 },
   kpiUnit: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 },
   footer: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-});
+  }),
+);

@@ -18,9 +18,13 @@ import {
   buildAliasLookup,
   DEFAULT_VEHICLE_PROFILE_ID,
   getVehicleProfileById,
+  normalizeProfileId,
   VEHICLE_PROFILES,
   type VehicleProfileId,
 } from '../lib/config/vehicleProfiles';
+import { loadVehicleProfileId, saveVehicleProfileId } from '../lib/settings/settingsStore';
+import type { TeslaModelKey } from '../lib/vehicle/modelDetection';
+import { VehicleFingerprintCollector } from '../lib/vehicle/vehicleFingerprint';
 import { SessionStore } from '../lib/export/sessionStore';
 import { exportSessionAsCsv } from '../lib/export/csv';
 
@@ -85,6 +89,28 @@ const SYSTEM_SIGNAL_INDEX = buildSystemSignalIndex();
  * stay off until the user streams a specific system, so the adapter's refresh
  * cycle stays short (the Scan My Tesla "pick what to log" trade-off).
  */
+// Listen-only capture right after connecting, used to identify the vehicle.
+const IDENTIFY_LISTEN_MS = 3_000;
+// Below this many distinct ids the capture is too thin to prune the poll plan.
+const IDENTIFY_MIN_IDS_FOR_PRUNING = 10;
+
+export interface DetectedVehicle {
+  profileId: VehicleProfileId | null;
+  model: TeslaModelKey | null;
+  vin: string | null;
+  /** Distinct CAN ids heard during identification. */
+  idCount: number;
+}
+
+/** Profile used at start-up: the last one used (persisted), else the default. */
+function initialProfileId(): VehicleProfileId {
+  return normalizeProfileId(loadVehicleProfileId()) ?? DEFAULT_VEHICLE_PROFILE_ID;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function defaultDisabledPollIds(catalog: PollTargetInfo[]): Set<number> {
   return new Set(catalog.filter((info) => info.category === 'system').map((info) => info.id));
 }
@@ -120,7 +146,11 @@ export function useTelemetryController() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [lastExportUri, setLastExportUri] = useState<string | null>(null);
   const [selectedVehicleProfileId, setSelectedVehicleProfileId] =
-    useState<VehicleProfileId>(DEFAULT_VEHICLE_PROFILE_ID);
+    useState<VehicleProfileId>(initialProfileId);
+  const [detectedVehicle, setDetectedVehicle] = useState<DetectedVehicle | null>(null);
+  // Read by the connect flow, whose callback must not go stale on profile changes.
+  const selectedProfileRef = useRef(selectedVehicleProfileId);
+  selectedProfileRef.current = selectedVehicleProfileId;
   const [canFilterEnabled, setCanFilterEnabled] = useState(true);
   const [pollCatalog, setPollCatalog] = useState<PollTargetInfo[]>([]);
   const [disabledPollIds, setDisabledPollIds] = useState<Set<number>>(new Set());
@@ -244,6 +274,93 @@ export function useTelemetryController() {
       scheduleRawFlush();
     },
     [scheduleRawFlush],
+  );
+
+  /**
+   * Loads a profile's DBC and poll catalog and remembers the choice. Has no
+   * status guards, so the connect flow can switch profiles after identifying the
+   * car; user-initiated switches go through setVehicleProfile.
+   */
+  const applyProfile = useCallback(
+    async (profileId: VehicleProfileId): Promise<PollTargetInfo[]> => {
+      const nextDbc = await loadVehicleDbc(profileId);
+      const nextCatalog = describePollTargets(nextDbc, getVehicleProfileById(profileId));
+      dbcRef.current = nextDbc;
+      setPollCatalog(nextCatalog);
+      setDisabledPollIds(defaultDisabledPollIds(nextCatalog));
+      setSelectedVehicleProfileId(profileId);
+      saveVehicleProfileId(profileId);
+      clearLiveSignalCache(true);
+      return nextCatalog;
+    },
+    [clearLiveSignalCache],
+  );
+
+  /**
+   * Listens to the bus for a few seconds (nothing is sent to the car), picks the
+   * matching profile and, when the capture is rich enough, turns off polling of
+   * message ids this bus never carries so the refresh cycle stays short.
+   */
+  const identifyVehicle = useCallback(
+    async (elm: Elm327Session, currentProfileId: VehicleProfileId): Promise<void> => {
+      appendLog('Listening to identify the vehicle…');
+      const collector = new VehicleFingerprintCollector();
+
+      try {
+        await elm.startMonitoring((frame) => collector.add(frame));
+        await delay(IDENTIFY_LISTEN_MS);
+      } finally {
+        await elm.stopMonitoring();
+      }
+
+      if (collector.distinctIds === 0) {
+        appendLog('No CAN traffic heard (car asleep?). Keeping the selected vehicle profile.');
+        setDetectedVehicle(null);
+        return;
+      }
+
+      const familyDbcs = {} as Record<VehicleProfileId, DbcDatabase>;
+      for (const profile of VEHICLE_PROFILES) {
+        familyDbcs[profile.id] = await loadVehicleDbc(profile.id);
+      }
+      const fingerprint = collector.result(familyDbcs);
+      const scoreText = VEHICLE_PROFILES.map((profile) => `${profile.name}: ${fingerprint.scores[profile.id]}`).join(', ');
+      appendLog(
+        `Heard ${fingerprint.seenIds.size} CAN ids (family-specific — ${scoreText})` +
+          (fingerprint.vin ? `; VIN ${fingerprint.vin}` : '') +
+          '.',
+      );
+
+      setDetectedVehicle({
+        profileId: fingerprint.family,
+        model: fingerprint.model,
+        vin: fingerprint.vin,
+        idCount: fingerprint.seenIds.size,
+      });
+
+      if (!fingerprint.family) {
+        appendLog('Vehicle not identified with confidence. Keeping the selected vehicle profile.');
+        return;
+      }
+
+      let catalog: PollTargetInfo[] | null = null;
+      if (fingerprint.family !== currentProfileId) {
+        catalog = await applyProfile(fingerprint.family);
+        appendLog(`Vehicle identified — switched profile to ${getVehicleProfileById(fingerprint.family).name}.`);
+      } else {
+        appendLog(`Vehicle identified — ${getVehicleProfileById(fingerprint.family).name} profile already selected.`);
+      }
+
+      if (fingerprint.seenIds.size >= IDENTIFY_MIN_IDS_FOR_PRUNING) {
+        const source = catalog ?? describePollTargets(familyDbcs[fingerprint.family], getVehicleProfileById(fingerprint.family));
+        const absent = source.filter((info) => !fingerprint.seenIds.has(info.id)).map((info) => info.id);
+        if (absent.length > 0) {
+          setDisabledPollIds((current) => new Set([...current, ...absent]));
+          appendLog(`${absent.length} message group(s) not on this bus were turned off (re-enable in Setup).`);
+        }
+      }
+    },
+    [appendLog, applyProfile],
   );
 
   const flushUiSignals = useCallback(() => {
@@ -447,6 +564,14 @@ export function useTelemetryController() {
 
         elmRef.current = elm;
         setSelectedDeviceId(deviceId);
+
+        try {
+          await identifyVehicle(elm, selectedProfileRef.current);
+        } catch (identifyError) {
+          const message = identifyError instanceof Error ? identifyError.message : String(identifyError);
+          appendLog(`Vehicle identification skipped: ${message}`);
+        }
+
         setStatus('connected');
         appendLog('Adapter initialized — ready to stream.');
       } catch (connectError) {
@@ -456,7 +581,7 @@ export function useTelemetryController() {
         setStatus('error');
       }
     },
-    [appendLog, handleRawLine, stopScan],
+    [appendLog, handleRawLine, identifyVehicle, stopScan],
   );
 
   /**
@@ -564,13 +689,8 @@ export function useTelemetryController() {
       setStatus('booting');
 
       try {
-        const nextDbc = await loadVehicleDbc(profileId);
-        dbcRef.current = nextDbc;
-        const nextCatalog = describePollTargets(nextDbc, getVehicleProfileById(profileId));
-        setPollCatalog(nextCatalog);
-        setDisabledPollIds(defaultDisabledPollIds(nextCatalog));
-        setSelectedVehicleProfileId(profileId);
-        clearLiveSignalCache(true);
+        await applyProfile(profileId);
+        setDetectedVehicle(null);
         setStatus('idle');
       } catch (switchError) {
         const message = switchError instanceof Error ? switchError.message : String(switchError);
@@ -578,7 +698,7 @@ export function useTelemetryController() {
         setStatus('error');
       }
     },
-    [clearLiveSignalCache, selectedVehicleProfileId, status],
+    [applyProfile, selectedVehicleProfileId, status],
   );
 
   const togglePollId = useCallback((id: number) => {
@@ -710,10 +830,12 @@ export function useTelemetryController() {
       ble.setLogger((message) => appendLogRef.current(message));
 
       try {
-        const bootDbc = await loadVehicleDbc(DEFAULT_VEHICLE_PROFILE_ID);
+        // Start with the profile used last time (the state was initialised from it).
+        const bootProfileId = selectedProfileRef.current;
+        const bootDbc = await loadVehicleDbc(bootProfileId);
         dbcRef.current = bootDbc;
         if (mounted) {
-          const bootCatalog = describePollTargets(bootDbc, getVehicleProfileById(DEFAULT_VEHICLE_PROFILE_ID));
+          const bootCatalog = describePollTargets(bootDbc, getVehicleProfileById(bootProfileId));
           setPollCatalog(bootCatalog);
           setDisabledPollIds(defaultDisabledPollIds(bootCatalog));
           setStatus('idle');
@@ -794,6 +916,7 @@ export function useTelemetryController() {
     selectedVehicleProfileId,
     selectedVehicleProfileName: selectedVehicleProfile.name,
     selectedVehicleProfile,
+    detectedVehicle,
     canFilterEnabled,
     setCanFilterEnabled,
     pollCatalog,

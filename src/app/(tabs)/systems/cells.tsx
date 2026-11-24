@@ -1,7 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { pickHvAccessorySignals, pickHvCellSignals } from '../../../lib/hv/hvSignalCatalog';
+import {
+  brickTemperatureLookup,
+  pickHvAccessorySignals,
+  pickHvCellSignals,
+  pickHvModuleTemps,
+} from '../../../lib/hv/hvSignalCatalog';
 import { formatNumber } from '../../../lib/systems/readSignals';
 import { useApp } from '../../../state/AppContext';
 import {
@@ -15,7 +20,7 @@ import {
   tileWidth,
   useColumns,
 } from '../../../ui/components';
-import { colors, fonts, radius, spacing } from '../../../ui/theme';
+import { colors, fonts, radius, spacing, themed } from '../../../ui/theme';
 
 type ViewMode = 'map' | 'bars' | 'internals';
 
@@ -41,7 +46,9 @@ export default function CellsScreen() {
   const { columns, width } = useColumns(120, 4);
 
   const cells = useMemo(() => pickHvCellSignals(signals), [signals]);
-  const internals = useMemo(() => pickHvAccessorySignals(signals, 24), [signals]);
+  const moduleTemps = useMemo(() => pickHvModuleTemps(signals), [signals]);
+  const tempForBrick = useMemo(() => brickTemperatureLookup(cells, moduleTemps), [cells, moduleTemps]);
+  const internals = useMemo(() => pickHvAccessorySignals(signals, 40), [signals]);
 
   const stats = useMemo(() => {
     if (cells.length === 0) {
@@ -107,6 +114,7 @@ export default function CellsScreen() {
             {cells.map((cell) => {
               const isMin = cell.index === stats.min.index;
               const isMax = cell.index === stats.max.index;
+              const temp = tempForBrick(cell.index);
               return (
                 <View
                   key={cell.key}
@@ -119,6 +127,7 @@ export default function CellsScreen() {
                 >
                   <Text style={styles.mapIndex}>{cell.index + 1}</Text>
                   <Text style={styles.mapValue}>{cell.value.toFixed(3)}</Text>
+                  {temp !== null ? <Text style={styles.mapTemp}>{`${temp.toFixed(1)}°C`}</Text> : null}
                 </View>
               );
             })}
@@ -189,13 +198,15 @@ export default function CellsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() =>
+  StyleSheet.create({
   map: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   mapCell: { borderRadius: radius.sm, paddingVertical: 6, alignItems: 'center', borderWidth: 1, borderColor: 'transparent' },
   mapCellMin: { borderColor: colors.danger },
   mapCellMax: { borderColor: colors.neon },
   mapIndex: { color: '#CFE7DE', fontFamily: fonts.body, fontSize: 9 },
-  mapValue: { color: colors.text, fontFamily: fonts.heading, fontSize: 11 },
+  mapValue: { color: '#EFF3F2', fontFamily: fonts.heading, fontSize: 11 },
+  mapTemp: { color: '#CFE7DE', fontFamily: fonts.body, fontSize: 9 },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 190, paddingTop: spacing.sm },
   barItem: { alignItems: 'center', gap: 2 },
   bar: { width: 10, borderRadius: 3 },
@@ -215,4 +226,5 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendSwatch: { width: 14, height: 14, borderRadius: 3 },
   legendText: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 },
-});
+  }),
+);

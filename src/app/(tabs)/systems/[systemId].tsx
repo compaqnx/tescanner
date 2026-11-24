@@ -20,7 +20,7 @@ import {
   tileWidth,
   useColumns,
 } from '../../../ui/components';
-import { colors, fonts, spacing } from '../../../ui/theme';
+import { colors, fonts, spacing, themed } from '../../../ui/theme';
 
 /**
  * One EV system: headline KPIs, stream controls scoped to this system, then
@@ -152,10 +152,12 @@ export default function SystemScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() =>
+  StyleSheet.create({
   legend: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   legendText: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12, marginRight: spacing.sm },
   count: { color: colors.textDim, fontFamily: fonts.heading, fontSize: 12 },
   readOnly: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
   readOnlyText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, flex: 1 },
-});
+  }),
+);

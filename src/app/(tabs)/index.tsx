@@ -20,7 +20,7 @@ import {
   tileWidth,
   useColumns,
 } from '../../ui/components';
-import { colors, fonts, radius, spacing } from '../../ui/theme';
+import { colors, fonts, radius, spacing, themed } from '../../ui/theme';
 
 /** Reads one catalog value by system + id. */
 function useReading(systemId: SystemId, signalId: string) {
@@ -48,8 +48,15 @@ export default function LiveScreen() {
   const gear = useReading('propulsion', 'gear');
 
   const model = useMemo(
-    () => detectTeslaModel(isConnected, app.selectedVehicleProfileId, app.selectedDevice?.name ?? null, signalIndex),
-    [app.selectedDevice?.name, app.selectedVehicleProfileId, isConnected, signalIndex],
+    () =>
+      detectTeslaModel(
+        isConnected,
+        app.selectedVehicleProfileId,
+        app.selectedDevice?.name ?? null,
+        signalIndex,
+        app.detectedVehicle?.model ?? null,
+      ),
+    [app.detectedVehicle?.model, app.selectedDevice?.name, app.selectedVehicleProfileId, isConnected, signalIndex],
   );
 
   const hasData = app.signals.length > 0;
@@ -206,7 +213,8 @@ export default function LiveScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() =>
+  StyleSheet.create({
   hero: { gap: spacing.md },
   heroLandscape: { flexDirection: 'row', alignItems: 'center' },
   heroImage: { width: '100%', maxWidth: 360, height: 140, alignSelf: 'center' },
@@ -253,4 +261,5 @@ const styles = StyleSheet.create({
   systemKpiLabel: { color: colors.textDim, fontFamily: fonts.body, fontSize: 11 },
   systemKpiValue: { color: colors.text, fontFamily: fonts.heading, fontSize: 17 },
   coverage: { color: colors.textDim, fontFamily: fonts.body, fontSize: 11, marginTop: 'auto' },
-});
+  }),
+);
