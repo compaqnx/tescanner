@@ -17,6 +17,25 @@ export default function SystemsHub() {
   return (
     <Screen title={t('systemsTitle')} subtitle={t('accessReadOnly')}>
       <Hint>{t('systemsHint')}</Hint>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={locale === 'ro' ? 'Vedere sistem HV' : 'HV system overview'}
+        onPress={() => router.navigate('/systems/hv')}
+        style={({ pressed }) => [styles.card, styles.hvEntry, pressed && { opacity: 0.75 }]}
+      >
+        <View style={[styles.iconWrap, { backgroundColor: '#F2A90022' }]}>
+          <MaterialCommunityIcons name="lightning-bolt" size={26} color="#F2A900" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>{locale === 'ro' ? 'Vedere sistem HV' : 'HV system overview'}</Text>
+          <Text style={styles.description} numberOfLines={2}>
+            {locale === 'ro'
+              ? 'Schema live: baterie, contactori, izolatie si consumatorii de pe legatura DC.'
+              : 'Live schematic: battery, contactors, isolation and the loads on the DC link.'}
+          </Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textMuted} />
+      </Pressable>
       <Grid>
         {SYSTEMS.map((system) => {
           const { coverage, kpis } = systemSummaries[system.id];
@@ -92,6 +111,7 @@ const styles = themed(() =>
     gap: spacing.sm,
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  hvEntry: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderLeftColor: '#F2A900' },
   iconWrap: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   index: { color: colors.textDim, fontFamily: fonts.heading, fontSize: 11, letterSpacing: 1 },
   title: { color: colors.text, fontFamily: fonts.heading, fontSize: 17 },

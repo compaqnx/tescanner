@@ -93,6 +93,8 @@ export const SYSTEMS: SystemSpec[] = [
         title: L('High-voltage pack', 'Pachet HV'),
         description: L('Pack voltage, current, power and state of charge.', 'Tensiune, curent, putere si stare de incarcare.'),
         icon: 'battery-high',
+        detailRoute: '/systems/hv',
+        detailLabel: L('Open HV overview', 'Deschide vederea HV'),
         signals: [
           { id: 'soc', label: L('State of charge (UI)', 'Stare incarcare (UI)'), names: ['batterySocUi', 'SOCUI292', 'UI_SOC', 'BMS_uiSoC'], unit: '%', digits: 1, warnLow: 10 },
           { id: 'socReal', label: L('State of charge (real)', 'Stare incarcare (reala)'), names: ['batterySocReal', 'SOCave292', 'BMS_realSoC'], unit: '%', digits: 1 },
@@ -144,6 +146,8 @@ export const SYSTEMS: SystemSpec[] = [
         title: L('Contactors, fuses & isolation', 'Contactori, sigurante si izolatie'),
         description: L('HV disconnect state, interlock loop and isolation resistance.', 'Starea deconectarii HV, bucla de interblocare si rezistenta de izolatie.'),
         icon: 'electric-switch',
+        detailRoute: '/systems/hv',
+        detailLabel: L('Open HV overview', 'Deschide vederea HV'),
         signals: [
           { id: 'packContactor', label: L('Pack contactors', 'Contactori pachet'), names: ['HVP_packContactorSetState', 'BMS_contactorState', 'SX_contactorState'], kind: 'state' },
           { id: 'packContPos', label: L('Pack + contactor', 'Contactor pachet +'), names: ['HVP_packContPositiveState'], kind: 'state' },
