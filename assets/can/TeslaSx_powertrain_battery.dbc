@@ -58,7 +58,7 @@ BO_ 741 FDI_power: 8 DIF
 
 BO_ 770 BMS_socStatus: 8 BMS
  SG_ SX_socMin : 0|10@1+ (0.1,0) [0|102.3] "%" Vector__XXX
- SG_ SX_socUi : 10|10@1+ (0.1,0) [0|102.3] "%" Vector__XXX
+ SG_ SX_socBms : 10|10@1+ (0.1,0) [0|102.3] "%" Vector__XXX
  SG_ SX_chargeTotalSelect M : 20|4@1+ (1,0) [0|15] "" Vector__XXX
  SG_ SX_dcChargeTotal m0 : 32|32@1+ (0.001,0) [0|4294967] "kWh" Vector__XXX
  SG_ SX_acChargeTotal m1 : 32|32@1+ (0.001,0) [0|4294967] "kWh" Vector__XXX
@@ -247,11 +247,12 @@ BO_ 1778 BMS_brickData: 8 BMS
  SG_ SX_moduleTemp32 m31 : 50|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
 
 CM_ SG_ 258 SX_packCurrent "Positive = discharge. Signed 16-bit, no offset: verified on a 2018 Model X (parked, awake: raw 0xFFF3 = +1.3 A at 309 V). The former 1000 A offset read ~1001 A at rest.";
-CM_ BO_ 898 "11-bit fields (same layout as Model 3 0x352). Verified on a 2018 Model X: nominalEnergyRemaining / nominalFullPackEnergy = 29.4 / 63.3 = 46.4 %, matching SX_socUi. The former 10-bit layout read 58.8 kWh remaining at 46 % SoC.";
+CM_ BO_ 898 "11-bit fields (same layout as Model 3 0x352). Verified on a 2018 Model X: nominalEnergyRemaining / nominalFullPackEnergy matches SX_socBms (0x302). The SoC the car displays is (nominalEnergyRemaining - energyBuffer) / (nominalFullPackEnergy - energyBuffer): (30.8-6.0)/(63.2-6.0) = 43.4 % with the car showing 43 %. The app derives it as SX_socUi.";
 CM_ SG_ 1778 Brick0 "Raw 0x3FFF (4.997 V) = brick slot not populated / SNA; packs with fewer bricks report it for unused slots.";
 CM_ SG_ 792 SX_outsideTemp "Raw 0xFD-0xFF = SNA (THC reports 0xFD while the HVAC is idle).";
 CM_ SG_ 978 SX_totalDischarge "Order matches Model 3 ID3D2 and Battery-Emulator; Scan My Tesla labels bytes 0-3 as charge. VERIFY.";
-CM_ SG_ 770 SX_socMin "VERIFY: some sources label bits 0-9 as UI SoC.";
+CM_ SG_ 770 SX_socMin "VERIFY: some sources label bits 0-9 as UI SoC. On a 2018 Model X it read 52.0 % while the car showed 43 %, so it is not the displayed SoC.";
+CM_ SG_ 770 SX_socBms "BMS SoC including the bottom buffer (= nominal remaining / nominal full). Not the SoC the car displays: see BO_ 898.";
 CM_ SG_ 1778 SX_brickMux "0-23: four brick voltages each (96 bricks); 24-31: four module temperatures each (32 sensors).";
 
 VAL_ 792 SX_outsideTemp 255 "SNA" 254 "SNA" 253 "SNA" ;

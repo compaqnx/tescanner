@@ -8,7 +8,7 @@ import { labelFor } from '../../lib/systems/readSignals';
 import { SYSTEM_BY_ID } from '../../lib/systems/systemCatalog';
 import { useApp } from '../../state/AppContext';
 import { Button, ButtonRow, Card, EmptyState, Hint, Screen, Segmented } from '../../ui/components';
-import { colors, fonts, radius, spacing, TOUCH_TARGET, themed } from '../../ui/theme';
+import { accentColor, colors, fonts, radius, spacing, TOUCH_TARGET, themed } from '../../ui/theme';
 
 type Tab = 'alerts' | 'events' | 'raw' | 'console' | 'explorer';
 
@@ -43,7 +43,7 @@ export default function DiagnosticsScreen() {
               const system = SYSTEM_BY_ID[alert.systemId];
               return (
                 <View key={alert.key} style={styles.row}>
-                  <MaterialCommunityIcons name={system.icon} size={20} color={system.accent} />
+                  <MaterialCommunityIcons name={system.icon} size={20} color={accentColor(system.accent)} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{labelFor(alert.label, locale)}</Text>
                     <Text style={styles.rowMeta}>{labelFor(system.title, locale)}</Text>

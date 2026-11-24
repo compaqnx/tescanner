@@ -8,7 +8,7 @@ import { SYSTEM_BY_ID, SYSTEMS } from '../../lib/systems/systemCatalog';
 import { useApp } from '../../state/AppContext';
 import { Button, ButtonRow, Card, EmptyState, Hint, Pill, Screen, Segmented, tileWidth, useColumns } from '../../ui/components';
 import type { IconName } from '../../ui/icons';
-import { colors, fonts, radius, spacing, TOUCH_TARGET, themed } from '../../ui/theme';
+import { accentColor, colors, fonts, radius, spacing, TOUCH_TARGET, themed } from '../../ui/theme';
 
 const PROFILE_KEYS: Record<string, { name: TranslationKey; desc: TranslationKey }> = {
   model3y: { name: 'profileModel3yName', desc: 'profileModel3yDesc' },
@@ -204,6 +204,18 @@ export default function SetupScreen() {
         </View>
       </Card>
 
+      {/* 2b. Reference for the battery-health (SOH) estimate. */}
+      <Card title={t('packReferenceLabel')} icon="battery-heart-variant" subtitle={t('packReferenceHint')}>
+        <Segmented<string>
+          value={app.packReferenceKwh === null ? 'auto' : String(app.packReferenceKwh)}
+          onChange={(value) => app.setPackReferenceKwh(value === 'auto' ? null : Number(value))}
+          options={[
+            { value: 'auto', label: t('packReferenceAuto') },
+            ...['60', '70', '75', '85', '90', '100'].map((kwh) => ({ value: kwh, label: `${kwh} kWh` })),
+          ]}
+        />
+      </Card>
+
       {/* 3. Data stream: what the adapter is asked to listen for. */}
       <Card title={t('setupStream')} icon="access-point-network" subtitle={t('settingsCanFilterHint')}>
         <Segmented<'on' | 'off'>
@@ -244,7 +256,7 @@ export default function SetupScreen() {
                   style={({ pressed }) => [styles.systemRow, pressed && { opacity: 0.75 }]}
                 >
                   <MaterialCommunityIcons name={state} size={24} color={enabled > 0 ? colors.neon : colors.textMuted} />
-                  <MaterialCommunityIcons name={system.icon} size={20} color={system.accent} />
+                  <MaterialCommunityIcons name={system.icon} size={20} color={accentColor(system.accent)} />
                   <Text style={styles.systemName}>{labelFor(system.title, locale)}</Text>
                   <Pill text={`${enabled}/${ids.length}`} color={enabled > 0 ? colors.live : colors.textDim} />
                 </Pressable>

@@ -1,4 +1,5 @@
 import { CanFrame, DecodedSignal } from '../can/types';
+import { withDerivedSignals } from './derivedSignals';
 import { DbcDatabase, DbcMessage, DbcSignal } from './types';
 
 function extractLittleEndianRaw(data: Uint8Array, startBit: number, bitLength: number): bigint {
@@ -209,5 +210,5 @@ export function decodeCanFrame(frame: CanFrame, dbc: DbcDatabase): DecodedSignal
     return [];
   }
 
-  return decodeFrameSignals(frame, message);
+  return withDerivedSignals(decodeFrameSignals(frame, message));
 }

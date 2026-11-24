@@ -6,7 +6,7 @@ import { labelFor } from '../../../lib/systems/readSignals';
 import { SYSTEMS } from '../../../lib/systems/systemCatalog';
 import { useApp } from '../../../state/AppContext';
 import { Grid, Hint, Pill, Screen, tileWidth, useColumns } from '../../../ui/components';
-import { colors, fonts, radius, spacing, themed } from '../../../ui/theme';
+import { accentColor, colors, fonts, radius, spacing, themed } from '../../../ui/theme';
 
 export default function SystemsHub() {
   const { t, locale, systemSummaries, pollCatalog, disabledPollIds, canFilterEnabled } = useApp();
@@ -48,11 +48,11 @@ export default function SystemsHub() {
               accessibilityRole="button"
               accessibilityLabel={labelFor(system.title, locale)}
               onPress={() => router.navigate(`/systems/${system.id}`)}
-              style={({ pressed }) => [styles.card, { width: cardWidth, borderLeftColor: system.accent }, pressed && { opacity: 0.75 }]}
+              style={({ pressed }) => [styles.card, { width: cardWidth, borderLeftColor: accentColor(system.accent) }, pressed && { opacity: 0.75 }]}
             >
               <View style={styles.head}>
-                <View style={[styles.iconWrap, { backgroundColor: `${system.accent}22` }]}>
-                  <MaterialCommunityIcons name={system.icon} size={26} color={system.accent} />
+                <View style={[styles.iconWrap, { backgroundColor: `${accentColor(system.accent)}22` }]}>
+                  <MaterialCommunityIcons name={system.icon} size={26} color={accentColor(system.accent)} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.index}>{system.index}</Text>

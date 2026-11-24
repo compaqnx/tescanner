@@ -108,6 +108,27 @@ export function applyColorScheme(scheme: ColorScheme): void {
 }
 
 /**
+ * A fixed accent colour (system accents, chart series) adjusted for the active
+ * theme. Accents are tuned for the dark background; on the light theme they are
+ * darkened so text and icons in that colour keep their contrast on white (the
+ * lime Energy Storage accent was nearly invisible).
+ */
+export function accentColor(hex: string): string {
+  if (activeScheme !== 'light') {
+    return hex;
+  }
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!match) {
+    return hex;
+  }
+  const scale = 0.58;
+  return `#${match
+    .slice(1, 4)
+    .map((part) => Math.round(parseInt(part, 16) * scale).toString(16).padStart(2, '0'))
+    .join('')}`;
+}
+
+/**
  * Wraps a module-level style sheet so it is rebuilt from the current palette
  * after a theme switch: `const styles = themed(() => StyleSheet.create({...}))`.
  * The factory runs lazily on first access and again once per theme change.

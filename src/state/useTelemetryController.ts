@@ -18,7 +18,9 @@ import {
   buildAliasLookup,
   DEFAULT_VEHICLE_PROFILE_ID,
   getVehicleProfileById,
+  hasBusVariants,
   normalizeProfileId,
+  type BusKind,
   VEHICLE_PROFILES,
   type VehicleProfileId,
 } from '../lib/config/vehicleProfiles';
@@ -151,6 +153,10 @@ export function useTelemetryController() {
   // Read by the connect flow, whose callback must not go stale on profile changes.
   const selectedProfileRef = useRef(selectedVehicleProfileId);
   selectedProfileRef.current = selectedVehicleProfileId;
+  // Bus the adapter is on (legacy S/X powertrain vs chassis); powertrain until identified.
+  const [busKind, setBusKind] = useState<BusKind>('powertrain');
+  const busKindRef = useRef(busKind);
+  busKindRef.current = busKind;
   const [canFilterEnabled, setCanFilterEnabled] = useState(true);
   const [pollCatalog, setPollCatalog] = useState<PollTargetInfo[]>([]);
   const [disabledPollIds, setDisabledPollIds] = useState<Set<number>>(new Set());
@@ -282,19 +288,48 @@ export function useTelemetryController() {
    * car; user-initiated switches go through setVehicleProfile.
    */
   const applyProfile = useCallback(
-    async (profileId: VehicleProfileId): Promise<PollTargetInfo[]> => {
-      const nextDbc = await loadVehicleDbc(profileId);
+    async (profileId: VehicleProfileId, bus: BusKind = 'powertrain'): Promise<PollTargetInfo[]> => {
+      const nextDbc = await loadVehicleDbc(profileId, bus);
       const nextCatalog = describePollTargets(nextDbc, getVehicleProfileById(profileId));
       dbcRef.current = nextDbc;
       setPollCatalog(nextCatalog);
       setDisabledPollIds(defaultDisabledPollIds(nextCatalog));
       setSelectedVehicleProfileId(profileId);
+      setBusKind(bus);
       saveVehicleProfileId(profileId);
       clearLiveSignalCache(true);
       return nextCatalog;
     },
     [clearLiveSignalCache],
   );
+
+  /**
+   * Which bus the adapter hears, for profiles whose buses reuse ids (legacy S/X):
+   * the side with at least two ids only its DBC defines wins.
+   */
+  const pickBus = useCallback(async (profileId: VehicleProfileId, seenIds: Set<number>): Promise<BusKind | null> => {
+    if (!hasBusVariants(profileId)) {
+      return 'powertrain';
+    }
+    const powertrain = await loadVehicleDbc(profileId, 'powertrain');
+    const chassis = await loadVehicleDbc(profileId, 'chassis');
+    let powertrainOnly = 0;
+    let chassisOnly = 0;
+    for (const id of seenIds) {
+      if (powertrain.messages[id] && !chassis.messages[id]) {
+        powertrainOnly += 1;
+      } else if (chassis.messages[id] && !powertrain.messages[id]) {
+        chassisOnly += 1;
+      }
+    }
+    if (powertrainOnly >= 2 && powertrainOnly >= chassisOnly) {
+      return 'powertrain';
+    }
+    if (chassisOnly >= 2) {
+      return 'chassis';
+    }
+    return null;
+  }, []);
 
   /**
    * Listens to the bus for a few seconds (nothing is sent to the car), picks the
@@ -321,7 +356,7 @@ export function useTelemetryController() {
 
       const familyDbcs = {} as Record<VehicleProfileId, DbcDatabase>;
       for (const profile of VEHICLE_PROFILES) {
-        familyDbcs[profile.id] = await loadVehicleDbc(profile.id);
+        familyDbcs[profile.id] = await loadVehicleDbc(profile.id, 'all');
       }
       const fingerprint = collector.result(familyDbcs);
       const scoreText = VEHICLE_PROFILES.map((profile) => `${profile.name}: ${fingerprint.scores[profile.id]}`).join(', ');
@@ -343,24 +378,28 @@ export function useTelemetryController() {
         return;
       }
 
-      let catalog: PollTargetInfo[] | null = null;
-      if (fingerprint.family !== currentProfileId) {
-        catalog = await applyProfile(fingerprint.family);
-        appendLog(`Vehicle identified — switched profile to ${getVehicleProfileById(fingerprint.family).name}.`);
-      } else {
-        appendLog(`Vehicle identified — ${getVehicleProfileById(fingerprint.family).name} profile already selected.`);
-      }
+      const family = fingerprint.family;
+      const bus = (await pickBus(family, fingerprint.seenIds)) ?? busKindRef.current;
+      const name = getVehicleProfileById(family).name;
+      const busNote = hasBusVariants(family) ? ` (${bus} bus)` : '';
+
+      // Always (re)apply: the bus may differ even when the family is unchanged.
+      const catalog = await applyProfile(family, bus);
+      appendLog(
+        family !== currentProfileId
+          ? `Vehicle identified — switched profile to ${name}${busNote}.`
+          : `Vehicle identified — ${name}${busNote}.`,
+      );
 
       if (fingerprint.seenIds.size >= IDENTIFY_MIN_IDS_FOR_PRUNING) {
-        const source = catalog ?? describePollTargets(familyDbcs[fingerprint.family], getVehicleProfileById(fingerprint.family));
-        const absent = source.filter((info) => !fingerprint.seenIds.has(info.id)).map((info) => info.id);
+        const absent = catalog.filter((info) => !fingerprint.seenIds.has(info.id)).map((info) => info.id);
         if (absent.length > 0) {
           setDisabledPollIds((current) => new Set([...current, ...absent]));
           appendLog(`${absent.length} message group(s) not on this bus were turned off (re-enable in Setup).`);
         }
       }
     },
-    [appendLog, applyProfile],
+    [appendLog, applyProfile, pickBus],
   );
 
   const flushUiSignals = useCallback(() => {
@@ -456,6 +495,14 @@ export function useTelemetryController() {
     }
   }, []);
 
+  /** Values from a car we are no longer connected to must not linger on screen. */
+  const clearAfterDisconnect = useCallback(() => {
+    clearLiveSignalCache(true);
+    setDetectedVehicle(null);
+    setSelectedDeviceId(null);
+    setStatus('idle');
+  }, [clearLiveSignalCache]);
+
   const disconnect = useCallback(async () => {
     await stopStreaming();
 
@@ -463,9 +510,30 @@ export function useTelemetryController() {
     elmRef.current = null;
 
     await bleRef.current?.disconnect();
-    setSelectedDeviceId(null);
-    setStatus('idle');
-  }, [stopStreaming]);
+    clearAfterDisconnect();
+  }, [clearAfterDisconnect, stopStreaming]);
+
+  /** The adapter dropped the Bluetooth link on its own (out of range, unplugged, car off). */
+  const handleLinkLost = useCallback(async () => {
+    appendLog('Bluetooth link lost — live values cleared.');
+    const elm = elmRef.current;
+    elmRef.current = null;
+    try {
+      await elm?.dispose();
+    } catch {
+      // The link is already gone.
+    }
+    try {
+      await storeRef.current?.stopSession();
+    } catch {
+      // Best effort: keep whatever was recorded.
+    }
+    setActiveSessionId(null);
+    setStreamStartedAt(null);
+    clearAfterDisconnect();
+  }, [appendLog, clearAfterDisconnect]);
+  const handleLinkLostRef = useRef(handleLinkLost);
+  handleLinkLostRef.current = handleLinkLost;
 
   const scanForAdapters = useCallback(async () => {
     const ble = bleRef.current;
@@ -828,6 +896,9 @@ export function useTelemetryController() {
       bleRef.current = ble;
       storeRef.current = store;
       ble.setLogger((message) => appendLogRef.current(message));
+      ble.setDisconnectListener(() => {
+        void handleLinkLostRef.current();
+      });
 
       try {
         // Start with the profile used last time (the state was initialised from it).
@@ -917,6 +988,7 @@ export function useTelemetryController() {
     selectedVehicleProfileName: selectedVehicleProfile.name,
     selectedVehicleProfile,
     detectedVehicle,
+    busKind,
     canFilterEnabled,
     setCanFilterEnabled,
     pollCatalog,

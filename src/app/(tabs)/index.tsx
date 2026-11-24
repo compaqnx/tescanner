@@ -6,6 +6,7 @@ import { SYSTEMS, findSignalSpec, type SystemId } from '../../lib/systems/system
 import { labelFor, readSignal } from '../../lib/systems/readSignals';
 import { detectTeslaModel, TESLA_MODEL_IMAGES } from '../../lib/vehicle/modelDetection';
 import { useApp } from '../../state/AppContext';
+import { BatteryHealthCard } from '../../ui/BatteryHealthCard';
 import {
   Button,
   ButtonRow,
@@ -20,7 +21,7 @@ import {
   tileWidth,
   useColumns,
 } from '../../ui/components';
-import { colors, fonts, radius, spacing, themed } from '../../ui/theme';
+import { accentColor, colors, fonts, radius, spacing, themed } from '../../ui/theme';
 
 /** Reads one catalog value by system + id. */
 function useReading(systemId: SystemId, signalId: string) {
@@ -147,6 +148,8 @@ export default function LiveScreen() {
         <MetricTile width={secondaryWidth} label={labelFor(outside?.spec.label ?? { en: 'Outside', ro: 'Exterior' }, locale)} value={outside?.text ?? '--'} unit="°C" />
       </Grid>
 
+      <BatteryHealthCard />
+
       <Card
         title={t('liveAlertsTitle')}
         icon="alert-outline"
@@ -185,7 +188,7 @@ export default function LiveScreen() {
               style={({ pressed }) => [styles.systemTile, { width: systemWidth }, pressed && { opacity: 0.75 }]}
             >
               <View style={styles.systemHead}>
-                <MaterialCommunityIcons name={system.icon} size={20} color={system.accent} />
+                <MaterialCommunityIcons name={system.icon} size={20} color={accentColor(system.accent)} />
                 <Text style={styles.systemName} numberOfLines={1}>
                   {labelFor(system.short, locale)}
                 </Text>

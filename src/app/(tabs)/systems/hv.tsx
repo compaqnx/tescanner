@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View, type DimensionValue } from 'react-native';
+import { Image, StyleSheet, Text, View, type DimensionValue } from 'react-native';
+import { CAR_PHOTO, type CarPhotoConfig } from '../../../lib/vehicle/carPhoto';
 import type { LocaleCode } from '../../../lib/i18n/localization';
 import { buildHvOverview, type HvNode, type HvStatus } from '../../../lib/systems/hvOverview';
 import { labelFor } from '../../../lib/systems/readSignals';
@@ -193,6 +194,105 @@ function Schematic({
   );
 }
 
+/**
+ * The user's own car photo with the HV components drawn on top (see
+ * lib/vehicle/carPhoto.ts). Same status colours and energised bus as the drawn
+ * schematic; positions come from the photo's config.
+ */
+function PhotoSchematic({
+  photo,
+  width,
+  energized,
+  nodes,
+  packText,
+  locale,
+}: {
+  photo: CarPhotoConfig;
+  width: number;
+  energized: boolean;
+  nodes: HvNode[];
+  packText: string;
+  locale: LocaleCode;
+}) {
+  const height = Math.round(width / photo.aspect);
+  const byId = new Map(nodes.map((node) => [node.id, node] as const));
+  const busColor = energized ? HV_ACTIVE : colors.borderStrong;
+  const block = Math.max(26, Math.round(Math.min(width, height) * 0.13));
+  const duX = [photo.components.frontDu.x, photo.components.rearDu.x];
+  const busLeft = Math.min(...duX);
+  const busWidth = Math.abs(duX[0] - duX[1]);
+
+  return (
+    <View style={{ width, height }} accessibilityRole="image" accessibilityLabel="High-voltage system on the car photo">
+      <Image source={photo.source} style={StyleSheet.absoluteFill} resizeMode="contain" />
+
+      <View
+        style={[
+          styles.photoPack,
+          {
+            left: pct(photo.pack.left),
+            top: pct(photo.pack.top),
+            width: pct(photo.pack.width),
+            height: pct(photo.pack.height),
+            backgroundColor: energized ? HV_ACTIVE_SOFT : 'rgba(120, 130, 130, 0.18)',
+            borderColor: energized ? HV_ACTIVE : colors.borderStrong,
+          },
+        ]}
+      >
+        <View style={styles.photoPackLabel}>
+          <Text style={styles.photoPackText} numberOfLines={1}>
+            {packText}
+          </Text>
+        </View>
+      </View>
+
+      <View style={[styles.bus, { left: pct(busLeft), width: pct(busWidth), top: pct(photo.busY), backgroundColor: busColor }]} />
+      {PLACEMENT.filter((item) => item.id !== 'frontDu' && item.id !== 'rearDu').map((item) => {
+        const point = photo.components[item.id];
+        const top = Math.min(point.y, photo.busY);
+        return (
+          <View
+            key={`stub-${item.id}`}
+            style={[
+              styles.stub,
+              { left: pct(point.x), top: pct(top), height: pct(Math.abs(photo.busY - point.y)), backgroundColor: busColor },
+            ]}
+          />
+        );
+      })}
+
+      {PLACEMENT.map((item) => {
+        const point = photo.components[item.id];
+        const status = byId.get(item.id)?.status ?? 'unknown';
+        const color = statusColor(status);
+        return (
+          <View
+            key={item.id}
+            style={[
+              styles.photoBlock,
+              {
+                width: block,
+                height: block,
+                left: (width * point.x) / 100 - block / 2,
+                top: (height * point.y) / 100 - block / 2,
+                borderColor: color,
+                backgroundColor: status === 'ok' ? HV_ACTIVE : colors.surface,
+              },
+            ]}
+          >
+            <MaterialCommunityIcons name={item.icon} size={Math.round(block * 0.55)} color={status === 'ok' ? '#1A1300' : color} />
+            <View style={styles.photoLabelWrap} pointerEvents="none">
+              <Text style={styles.photoLabel} numberOfLines={1}>
+                {labelFor(item.short, locale)}
+              </Text>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function Row({ label, value, status }: { label: string; value: string | null; status?: HvStatus }) {
   return (
     <View style={styles.row}>
@@ -247,7 +347,18 @@ export default function HvOverviewScreen() {
   return (
     <Screen title={lbl(L('HV system', 'Sistem HV'))} subtitle={t('accessReadOnly')} back>
       <Card>
-        <Schematic width={schematicWidth} energized={hv.energized} nodes={hv.nodes} packText={packText} locale={locale} />
+        {CAR_PHOTO ? (
+          <PhotoSchematic
+            photo={CAR_PHOTO}
+            width={schematicWidth}
+            energized={hv.energized}
+            nodes={hv.nodes}
+            packText={packText}
+            locale={locale}
+          />
+        ) : (
+          <Schematic width={schematicWidth} energized={hv.energized} nodes={hv.nodes} packText={packText} locale={locale} />
+        )}
         <View style={styles.busState}>
           <View style={[styles.busSwatch, { backgroundColor: hv.energized ? HV_ACTIVE : colors.borderStrong }]} />
           <Text style={styles.busStateText}>
@@ -337,7 +448,7 @@ export default function HvOverviewScreen() {
         ))}
       </View>
       {!isStreaming ? (
-        <Text style={styles.note}>{lbl(L('Values freeze when the stream is stopped and turn grey after 5 s.', 'Valorile se opresc cand fluxul este oprit si devin gri dupa 5 s.'))}</Text>
+        <Text style={styles.note}>{lbl(L('Values freeze when the stream is stopped, turn grey after 30 s and clear on disconnect.', 'Valorile se opresc cand fluxul este oprit, devin gri dupa 30 s si se sterg la deconectare.'))}</Text>
       ) : null}
     </Screen>
   );
@@ -403,6 +514,26 @@ const styles = themed(() =>
     },
     componentLabelWrap: { position: 'absolute', bottom: '100%', left: -30, right: -30, alignItems: 'center', marginBottom: 2 },
     componentLabel: { color: colors.text, fontFamily: fonts.heading, fontSize: 9 },
+    photoPack: { position: 'absolute', borderWidth: 1.5, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+    photoPackLabel: { backgroundColor: 'rgba(0, 0, 0, 0.55)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 },
+    photoPackText: { color: '#FFFFFF', fontFamily: fonts.heading, fontSize: 11 },
+    photoBlock: {
+      position: 'absolute',
+      borderWidth: 2,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    photoLabelWrap: { position: 'absolute', top: '100%', left: -40, right: -40, alignItems: 'center', marginTop: 2 },
+    photoLabel: {
+      color: '#FFFFFF',
+      fontFamily: fonts.heading,
+      fontSize: 9,
+      backgroundColor: 'rgba(0, 0, 0, 0.55)',
+      borderRadius: 3,
+      paddingHorizontal: 4,
+      overflow: 'hidden',
+    },
     busState: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     busSwatch: { width: 18, height: 4, borderRadius: 2 },
     busStateText: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 },

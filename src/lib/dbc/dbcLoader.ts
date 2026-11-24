@@ -1,10 +1,10 @@
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
-import { getVehicleProfileById, VehicleProfileId } from '../config/vehicleProfiles';
+import { dbcAssetsFor, type BusKind, type VehicleProfileId } from '../config/vehicleProfiles';
 import { parseDbc } from './parseDbc';
 import { DbcDatabase } from './types';
 
-const profileDbcPromises = new Map<VehicleProfileId, Promise<DbcDatabase>>();
+const profileDbcPromises = new Map<string, Promise<DbcDatabase>>();
 
 function cloneDatabaseMessageSignals(source: DbcDatabase['messages']): DbcDatabase['messages'] {
   const result: DbcDatabase['messages'] = {};
@@ -90,19 +90,24 @@ async function loadDbcFromAsset(moduleAsset: number): Promise<DbcDatabase> {
   return parseDbc(source);
 }
 
-export function loadVehicleDbc(profileId: VehicleProfileId): Promise<DbcDatabase> {
-  const existingPromise = profileDbcPromises.get(profileId);
+/**
+ * Merged DBC for a profile on one bus. `bus` picks the bus-specific set for
+ * profiles that have one (legacy S/X: powertrain vs chassis reuse the same ids
+ * for different messages); 'all' merges every set, for vehicle identification.
+ */
+export function loadVehicleDbc(profileId: VehicleProfileId, bus: BusKind | 'all' = 'powertrain'): Promise<DbcDatabase> {
+  const assets = dbcAssetsFor(profileId, bus);
+  const key = `${profileId}:${bus}`;
+  const existingPromise = profileDbcPromises.get(key);
   if (existingPromise) {
     return existingPromise;
   }
 
-  const profile = getVehicleProfileById(profileId);
-  const assets = profile.dbcAssets;
   const promise = (async () => {
     const parsed = await Promise.all(assets.map((asset) => loadDbcFromAsset(asset)));
     return mergeDatabases(parsed);
   })();
 
-  profileDbcPromises.set(profileId, promise);
+  profileDbcPromises.set(key, promise);
   return promise;
 }

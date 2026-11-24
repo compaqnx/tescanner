@@ -101,6 +101,10 @@ const EN: Dictionary = {
   vehicleDetectedVin: 'Identified from VIN {vin}.',
   vehicleDetectedTraffic: 'Identified from bus traffic ({count} CAN ids).',
   vehicleNotDetected: 'Could not identify the vehicle — choose the profile manually.',
+  packReferenceLabel: 'Original pack capacity',
+  packReferenceHint:
+    'Used as "100 %" for the battery health estimate. Auto uses the value the car reports (Model 3/Y) or the pack size implied by the cell count (S/X 84 bricks = 75 kWh).',
+  packReferenceAuto: 'Auto',
   themeLabel: 'Theme',
   themeSystem: 'System',
   themeDark: 'Dark',
@@ -406,6 +410,10 @@ const RO: Dictionary = {
   vehicleDetectedVin: 'Identificat din VIN {vin}.',
   vehicleDetectedTraffic: 'Identificat din traficul magistralei ({count} ID-uri CAN).',
   vehicleNotDetected: 'Vehiculul nu a putut fi identificat — alege profilul manual.',
+  packReferenceLabel: 'Capacitatea originala a pachetului',
+  packReferenceHint:
+    'Folosita ca "100 %" pentru estimarea sanatatii bateriei. Auto foloseste valoarea raportata de masina (Model 3/Y) sau marimea pachetului dedusa din numarul de celule (S/X 84 grupuri = 75 kWh).',
+  packReferenceAuto: 'Auto',
   themeLabel: 'Tema',
   themeSystem: 'Sistem',
   themeDark: 'Intunecata',

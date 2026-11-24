@@ -10,7 +10,18 @@ import Storage from 'expo-sqlite/kv-store';
 const KEYS = {
   themeMode: 'settings.themeMode',
   vehicleProfile: 'settings.vehicleProfile',
+  packReferenceKwh: 'settings.packReferenceKwh',
 } as const;
+
+/** Original pack capacity for the SOH estimate; null = automatic. */
+export function loadPackReferenceKwh(): number | null {
+  const value = Number(readSync(KEYS.packReferenceKwh));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+export function savePackReferenceKwh(kwh: number | null): void {
+  writeSync(KEYS.packReferenceKwh, kwh === null ? '' : String(kwh));
+}
 
 export type ThemeMode = 'system' | 'dark' | 'light';
 

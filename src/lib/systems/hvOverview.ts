@@ -8,7 +8,7 @@
  * legacy Model S/X powertrain DBC); the first fresh match wins.
  */
 
-import { readSignal, STALE_AFTER_MS, type SignalIndex, type SignalReading } from './readSignals';
+import { readSignal, type SignalIndex, type SignalReading } from './readSignals';
 import type { Label, SignalSpec } from './systemCatalog';
 
 /** ok = healthy/active · idle = present but not drawing power · warn · fault · unknown = no fresh data. */
@@ -84,8 +84,13 @@ const S = {
   heaterTemp: spec('heaterTemp', ['SX_batteryHeaterTemp'], '°C', 0),
 };
 
+// How long a reading stays on screen without a new frame. The filtered poll plan
+// revisits each id only once per cycle (several seconds), and values are cleared
+// on disconnect anyway, so a short limit just made the view blink to "--".
+const HV_STALE_MS = 30_000;
+
 function fresh(reading: SignalReading, now: number): boolean {
-  return reading.value !== null && reading.updatedAt !== null && now - reading.updatedAt <= STALE_AFTER_MS;
+  return reading.value !== null && reading.updatedAt !== null && now - reading.updatedAt <= HV_STALE_MS;
 }
 
 function formatted(reading: SignalReading, now: number): string | null {

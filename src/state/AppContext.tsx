@@ -1,7 +1,13 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, useColorScheme } from 'react-native';
 import { LocaleCode, localizeTelemetryError, TranslationKey, translate } from '../lib/i18n/localization';
-import { loadThemeMode, saveThemeMode, type ThemeMode } from '../lib/settings/settingsStore';
+import {
+  loadPackReferenceKwh,
+  loadThemeMode,
+  savePackReferenceKwh,
+  saveThemeMode,
+  type ThemeMode,
+} from '../lib/settings/settingsStore';
 import { applyColorScheme, resolveColorScheme, type ColorScheme } from '../ui/theme';
 import {
   buildSignalIndex,
@@ -39,6 +45,9 @@ export interface AppContextValue extends Omit<Controller, 'startStreaming'> {
   setThemeMode: (mode: ThemeMode) => void;
   /** The scheme actually in use after resolving 'system'. */
   colorScheme: ColorScheme;
+  /** Original pack capacity (kWh) for the SOH estimate; null = automatic. Persisted. */
+  packReferenceKwh: number | null;
+  setPackReferenceKwh: (kwh: number | null) => void;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   localizedError: string | null;
   storedErrors: StoredError[];
@@ -74,6 +83,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setThemeMode = useCallback((mode: ThemeMode) => {
     saveThemeMode(mode);
     setThemeModeState(mode);
+  }, []);
+
+  const [packReferenceKwh, setPackReferenceState] = useState<number | null>(loadPackReferenceKwh);
+  const setPackReferenceKwh = useCallback((kwh: number | null) => {
+    savePackReferenceKwh(kwh);
+    setPackReferenceState(kwh);
   }, []);
   const [storedErrors, setStoredErrors] = useState<StoredError[]>([]);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -176,6 +191,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     themeMode,
     setThemeMode,
     colorScheme,
+    packReferenceKwh,
+    setPackReferenceKwh,
     t,
     localizedError,
     storedErrors,

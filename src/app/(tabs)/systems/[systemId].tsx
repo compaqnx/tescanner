@@ -20,7 +20,7 @@ import {
   tileWidth,
   useColumns,
 } from '../../../ui/components';
-import { colors, fonts, spacing, themed } from '../../../ui/theme';
+import { accentColor, colors, fonts, spacing, themed } from '../../../ui/theme';
 
 /**
  * One EV system: headline KPIs, stream controls scoped to this system, then
@@ -64,7 +64,7 @@ export default function SystemScreen() {
             label={labelFor(kpi.spec.label, locale)}
             value={kpi.text}
             unit={kpi.value !== null ? kpi.unit : undefined}
-            accent={system.accent}
+            accent={accentColor(system.accent)}
             warn={kpi.warn}
           />
         ))}
@@ -121,7 +121,7 @@ export default function SystemScreen() {
               title={labelFor(subsystem.title, locale)}
               subtitle={labelFor(subsystem.description, locale)}
               icon={subsystem.icon}
-              iconColor={system.accent}
+              iconColor={accentColor(system.accent)}
               right={
                 <Text style={styles.count}>
                   {t('subsystemAvailable', { available, total: readings.length })}

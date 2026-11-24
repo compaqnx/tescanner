@@ -47,7 +47,13 @@ export class VLinkerBleClient {
 
   private lineListener?: (line: string) => void;
   private logger?: (message: string) => void;
+  private disconnectListener?: () => void;
   private readBuffer = '';
+
+  /** Called when the adapter drops the link on its own (not on disconnect()). */
+  setDisconnectListener(listener?: () => void): void {
+    this.disconnectListener = listener;
+  }
 
   /** Receives human-readable scan/connect events for the in-app console log. */
   setLogger(logger?: (message: string) => void): void {
@@ -275,6 +281,8 @@ export class VLinkerBleClient {
         this.notifyCharacteristic = null;
         this.monitorSubscription?.remove();
         this.monitorSubscription = null;
+        this.readBuffer = '';
+        this.disconnectListener?.();
       }
     });
   }

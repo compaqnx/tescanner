@@ -1,4 +1,5 @@
 export type VehicleProfileId = 'model3y' | 'modelsx';
+export type BusKind = 'powertrain' | 'chassis';
 
 export interface CanonicalSignalAlias {
   canonicalName: string;
@@ -10,7 +11,10 @@ export interface VehicleProfileDefinition {
   id: VehicleProfileId;
   name: string;
   description: string;
+  /** DBC set for the default bus (the powertrain bus on legacy S/X). */
   dbcAssets: number[];
+  /** DBC set used instead when the adapter turns out to be on the chassis bus. */
+  chassisDbcAssets?: number[];
   watchSignals: string[];
   dashboardPrimaryMetrics: string[];
   dashboardSecondaryMetrics: string[];
@@ -114,6 +118,7 @@ const MODEL3Y_ALIASES: CanonicalSignalAlias[] = [
  */
 const MODELSX_ALIASES: CanonicalSignalAlias[] = [
   // km/h sources only, so the speed tile never flips between MPH and km/h.
+  // ESP_vehicleSpeed exists only on the chassis bus (its DBC is not loaded on the powertrain bus).
   { canonicalName: 'vehicleSpeed', label: 'Vehicle Speed', aliases: ['SX_vehicleSpeedKph', 'ESP_vehicleSpeed'] },
   { canonicalName: 'gear', label: 'Gear', aliases: ['DI_gear'] },
   { canonicalName: 'batterySocUi', label: 'Battery SoC (UI)', aliases: ['SX_socUi'] },
@@ -174,10 +179,16 @@ export const VEHICLE_PROFILES: VehicleProfileDefinition[] = [
     name: 'Model S / X',
     description:
       'Legacy Model S/X (2012-2021): battery & powertrain (pack, cells, drive units, DC-DC, thermal) plus chassis & driver assist (cruise, speed limits, MCU temps).',
+    // The two buses reuse ids for different messages (0x155, 0x368, 0x2BF, ... on
+    // the powertrain bus are not ESP_B / DI_state / DAS_control), so only one
+    // set is ever applied: the bus is picked when the car is identified.
     dbcAssets: [
       require('../../../assets/can/TeslaSx_powertrain_battery.dbc'),
       require('../../../assets/can/TeslaSx_tesla_powertrain.dbc'),
+    ],
+    chassisDbcAssets: [
       require('../../../assets/can/TeslaSx_tesla_can.dbc'),
+      require('../../../assets/can/TeslaSx_tesla_powertrain.dbc'),
     ],
     watchSignals: MODELSX_ALIASES.map((entry) => entry.canonicalName),
     dashboardPrimaryMetrics: ['vehicleSpeed', 'batterySocUi', 'packVoltage', 'packCurrent'],
@@ -229,6 +240,23 @@ export interface CanonicalSignalResolution {
 
 export function getVehicleProfileById(profileId: VehicleProfileId): VehicleProfileDefinition {
   return PROFILE_BY_ID[profileId];
+}
+
+/** DBC assets for a profile on a bus ('all' = every set, de-duplicated). */
+export function dbcAssetsFor(profileId: VehicleProfileId, bus: BusKind | 'all'): number[] {
+  const profile = PROFILE_BY_ID[profileId];
+  if (bus === 'chassis' && profile.chassisDbcAssets) {
+    return profile.chassisDbcAssets;
+  }
+  if (bus === 'all' && profile.chassisDbcAssets) {
+    return Array.from(new Set([...profile.dbcAssets, ...profile.chassisDbcAssets]));
+  }
+  return profile.dbcAssets;
+}
+
+/** True when the profile has separate powertrain and chassis DBC sets. */
+export function hasBusVariants(profileId: VehicleProfileId): boolean {
+  return Boolean(PROFILE_BY_ID[profileId].chassisDbcAssets);
 }
 
 export function buildAliasLookup(profile: VehicleProfileDefinition): Map<string, CanonicalSignalResolution> {

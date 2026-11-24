@@ -30,6 +30,8 @@ const DEFAULT_TIMEOUT_MS = 2_000;
 const STOP_TIMEOUT_MS = 600;
 // Short backoff when a write fails mid-cycle.
 const POLL_BACKOFF_MS = 60;
+// Upper bound for the adaptive per-id dwell (covers ~1 Hz messages).
+const MAX_DWELL_MS = 1_600;
 // Interrupts ATMA. A single non-CR character: a bare CR on an idle adapter would
 // repeat the last command (ATMA), and a trailing CR after the interrupt can do the
 // same once the prompt is back. A stray space on an idle adapter is harmless —
@@ -49,6 +51,10 @@ export class Elm327Session {
   private sleepCancel: (() => void) | null = null;
   private frameListener?: (frame: CanFrame) => void;
   private rawLineListener?: (line: RawMonitorLine) => void;
+  /** Frames parsed during the current poll dwell (filtered monitoring). */
+  private framesThisDwell = 0;
+  /** Per-id dwell learned from ids that produced no frame in their window. */
+  private readonly learnedDwellMs = new Map<number, number>();
 
   constructor(private readonly bleClient: VLinkerBleClient) {
     this.bleClient.setLineListener((line) => {
@@ -221,7 +227,16 @@ export class Elm327Session {
         continue;
       }
 
-      await this.sleep(target.dwellMs);
+      this.framesThisDwell = 0;
+      const dwellMs = this.learnedDwellMs.get(target.id) ?? target.dwellMs;
+      await this.sleep(dwellMs);
+
+      // Slow messages (e.g. 0x382 energy at ~1 Hz) are often missed by a short
+      // window, leaving their values stale for whole cycles. Double the window for
+      // an id that produced nothing, up to a cap; keep what worked otherwise.
+      if (this.framesThisDwell === 0 && dwellMs < MAX_DWELL_MS) {
+        this.learnedDwellMs.set(target.id, Math.min(MAX_DWELL_MS, dwellMs * 2));
+      }
 
       if (!live()) {
         // stopMonitoring() owns the interrupt from here.
@@ -327,6 +342,7 @@ export class Elm327Session {
     this.rawLineListener?.({ line, timestamp, frame });
 
     if (frame) {
+      this.framesThisDwell += 1;
       this.frameListener?.(frame);
     }
   }
