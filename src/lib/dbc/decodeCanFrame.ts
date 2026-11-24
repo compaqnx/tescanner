@@ -79,6 +79,9 @@ function toSignedValue(raw: bigint, bitLength: number): bigint {
   return raw - fullRange;
 }
 
+// Matches "SNA" and prefixed forms such as "DI_GEAR_SNA".
+const SNA_LABEL = /(^|_)SNA$/i;
+
 function normalizeRangeBound(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
 }
@@ -122,8 +125,17 @@ function decodeSignal(signal: DbcSignal, frame: CanFrame): DecodedSignal | null 
     return null;
   }
 
-  const value = rawNumber * signal.factor + signal.offset;
   const enumLabel = signal.valueDescriptions?.[rawNumber];
+
+  // "Signal not available" markers (e.g. 0x3FFF for an unpopulated brick slot,
+  // 0xFD for an idle HVAC temperature) are not measurements: scaling them yields
+  // plausible-looking garbage (4.997 V, 86.5 C) that would feed dashboards and
+  // alerts. Drop them so the last valid reading stays on screen instead.
+  if (enumLabel && SNA_LABEL.test(enumLabel)) {
+    return null;
+  }
+
+  const value = rawNumber * signal.factor + signal.offset;
 
   return {
     key: signal.name,

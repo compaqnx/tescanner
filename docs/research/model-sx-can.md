@@ -57,9 +57,20 @@ because its README says the data was extracted from Tesla firmware.
 
 ## Verify on a real car before trusting
 
-- **0x102 current**: sources disagree. Scan My Tesla uses `1000 − signed15 × 0.1` (used
-  here); Battery-Emulator uses signed 16-bit × 0.1. Check that the value is near 0 A when
-  parked and positive when accelerating.
+- **0x102 current** — *verified, 2018 Model X (parked, 2026-11-23 export)*: signed 16-bit
+  × −0.1, no offset (Battery-Emulator's form). Raw `0xFFF3` → +1.3 A discharge at 309 V. The
+  `1000 − signed15 × 0.1` form read ~1001 A at rest. Still confirm the sign under
+  acceleration (positive) and regen (negative).
+- **0x382 energy** — *verified, same export*: 11-bit fields like the Model 3 `0x352`
+  (full 0|11, nominal 11|11, expected 22|11, ideal 33|11, to-full 44|11, buffer 55|8).
+  Nominal remaining / full = 29.4 / 63.3 = 46.4 % = UI SoC. The 10-bit layout read
+  58.8 kWh remaining at 46 % SoC.
+- **0x6F2 bricks**: raw `0x3FFF` (4.997 V) marks an unpopulated slot (SNA). The verified car
+  sends mux 0–20 (slots 0–83, the last one SNA) and temperature mux 24–30 (28 sensors).
+- **0x318 temperatures**: bytes 0–2 read `0xFD` (SNA) on the parked car; only the A/C air
+  temperature (byte 4) was valid.
+- **0x302 lifetime counters**: mux 0 = 6913 kWh, mux 1 = 49 801 kWh (labelled DC and AC
+  here). Not yet cross-checked against the car's own totals.
 - **0x3D2 order**: discharge in bytes 0–3 follows the Model 3 DBC and Battery-Emulator;
   Scan My Tesla labels bytes 0–3 as charge. On a used car, discharge should be the larger
   value.

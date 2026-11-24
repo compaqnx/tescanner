@@ -10,7 +10,7 @@ CM_ "Tescanner Model S/X (2012-2021, pre-Palladium) powertrain-bus database. Wri
 
 BO_ 258 BMS_hvBusStatus: 8 BMS
  SG_ SX_packVoltage : 0|16@1+ (0.01,0) [0|500] "V" Vector__XXX
- SG_ SX_packCurrent : 16|15@1- (-0.1,1000) [-2000|2000] "A" Vector__XXX
+ SG_ SX_packCurrent : 16|16@1- (-0.1,0) [-2000|2000] "A" Vector__XXX
 
 BO_ 278 DI_torque2: 6 DI
  SG_ SX_vehicleSpeedKph : 16|12@1+ (0.0804672,-40.2336) [-40|290] "km/h" Vector__XXX
@@ -100,12 +100,13 @@ BO_ 824 UI_range: 8 GTW
  SG_ SX_typicalRange : 16|16@1+ (1.609344,0) [0|105000] "km" Vector__XXX
 
 BO_ 898 BMS_energyStatus: 8 BMS
- SG_ SX_nominalFullPackEnergy : 0|10@1+ (0.1,0) [0|102.3] "kWh" Vector__XXX
- SG_ SX_nominalEnergyRemaining : 10|10@1+ (0.1,0) [0|102.3] "kWh" Vector__XXX
- SG_ SX_expectedEnergyRemaining : 20|10@1+ (0.1,0) [0|102.3] "kWh" Vector__XXX
- SG_ SX_idealEnergyRemaining : 30|10@1+ (0.1,0) [0|102.3] "kWh" Vector__XXX
- SG_ SX_energyToChargeComplete : 40|10@1+ (0.1,0) [0|102.3] "kWh" Vector__XXX
- SG_ SX_energyBuffer : 50|8@1+ (0.1,0) [0|25.5] "kWh" Vector__XXX
+ SG_ SX_nominalFullPackEnergy : 0|11@1+ (0.1,0) [0|204.7] "kWh" Vector__XXX
+ SG_ SX_nominalEnergyRemaining : 11|11@1+ (0.1,0) [0|204.7] "kWh" Vector__XXX
+ SG_ SX_expectedEnergyRemaining : 22|11@1+ (0.1,0) [0|204.7] "kWh" Vector__XXX
+ SG_ SX_idealEnergyRemaining : 33|11@1+ (0.1,0) [0|204.7] "kWh" Vector__XXX
+ SG_ SX_energyToChargeComplete : 44|11@1+ (0.1,0) [0|204.7] "kWh" Vector__XXX
+ SG_ SX_energyBuffer : 55|8@1+ (0.1,0) [0|25.5] "kWh" Vector__XXX
+ SG_ SX_fullChargeComplete : 63|1@1+ (1,0) [0|1] "" Vector__XXX
 
 BO_ 978 BMS_kwhCounters: 8 BMS
  SG_ SX_totalDischarge : 0|32@1+ (0.001,0) [0|4294967] "kWh" Vector__XXX
@@ -245,7 +246,111 @@ BO_ 1778 BMS_brickData: 8 BMS
  SG_ SX_moduleTemp31 m31 : 36|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
  SG_ SX_moduleTemp32 m31 : 50|14@1- (0.0122,0) [-100|100] "C" Vector__XXX
 
-CM_ SG_ 258 SX_packCurrent "Positive = discharge. VERIFY: sources disagree (offset 1000 A, 15-bit) vs (signed 16-bit, no offset).";
+CM_ SG_ 258 SX_packCurrent "Positive = discharge. Signed 16-bit, no offset: verified on a 2018 Model X (parked, awake: raw 0xFFF3 = +1.3 A at 309 V). The former 1000 A offset read ~1001 A at rest.";
+CM_ BO_ 898 "11-bit fields (same layout as Model 3 0x352). Verified on a 2018 Model X: nominalEnergyRemaining / nominalFullPackEnergy = 29.4 / 63.3 = 46.4 %, matching SX_socUi. The former 10-bit layout read 58.8 kWh remaining at 46 % SoC.";
+CM_ SG_ 1778 Brick0 "Raw 0x3FFF (4.997 V) = brick slot not populated / SNA; packs with fewer bricks report it for unused slots.";
+CM_ SG_ 792 SX_outsideTemp "Raw 0xFD-0xFF = SNA (THC reports 0xFD while the HVAC is idle).";
 CM_ SG_ 978 SX_totalDischarge "Order matches Model 3 ID3D2 and Battery-Emulator; Scan My Tesla labels bytes 0-3 as charge. VERIFY.";
 CM_ SG_ 770 SX_socMin "VERIFY: some sources label bits 0-9 as UI SoC.";
 CM_ SG_ 1778 SX_brickMux "0-23: four brick voltages each (96 bricks); 24-31: four module temperatures each (32 sensors).";
+
+VAL_ 792 SX_outsideTemp 255 "SNA" 254 "SNA" 253 "SNA" ;
+VAL_ 792 SX_outsideTempFiltered 255 "SNA" 254 "SNA" 253 "SNA" ;
+VAL_ 792 SX_insideTemp 255 "SNA" 254 "SNA" 253 "SNA" ;
+VAL_ 792 SX_acAirTemp 255 "SNA" 254 "SNA" 253 "SNA" ;
+VAL_ 1778 Brick0 16383 "SNA" ;
+VAL_ 1778 Brick1 16383 "SNA" ;
+VAL_ 1778 Brick2 16383 "SNA" ;
+VAL_ 1778 Brick3 16383 "SNA" ;
+VAL_ 1778 Brick4 16383 "SNA" ;
+VAL_ 1778 Brick5 16383 "SNA" ;
+VAL_ 1778 Brick6 16383 "SNA" ;
+VAL_ 1778 Brick7 16383 "SNA" ;
+VAL_ 1778 Brick8 16383 "SNA" ;
+VAL_ 1778 Brick9 16383 "SNA" ;
+VAL_ 1778 Brick10 16383 "SNA" ;
+VAL_ 1778 Brick11 16383 "SNA" ;
+VAL_ 1778 Brick12 16383 "SNA" ;
+VAL_ 1778 Brick13 16383 "SNA" ;
+VAL_ 1778 Brick14 16383 "SNA" ;
+VAL_ 1778 Brick15 16383 "SNA" ;
+VAL_ 1778 Brick16 16383 "SNA" ;
+VAL_ 1778 Brick17 16383 "SNA" ;
+VAL_ 1778 Brick18 16383 "SNA" ;
+VAL_ 1778 Brick19 16383 "SNA" ;
+VAL_ 1778 Brick20 16383 "SNA" ;
+VAL_ 1778 Brick21 16383 "SNA" ;
+VAL_ 1778 Brick22 16383 "SNA" ;
+VAL_ 1778 Brick23 16383 "SNA" ;
+VAL_ 1778 Brick24 16383 "SNA" ;
+VAL_ 1778 Brick25 16383 "SNA" ;
+VAL_ 1778 Brick26 16383 "SNA" ;
+VAL_ 1778 Brick27 16383 "SNA" ;
+VAL_ 1778 Brick28 16383 "SNA" ;
+VAL_ 1778 Brick29 16383 "SNA" ;
+VAL_ 1778 Brick30 16383 "SNA" ;
+VAL_ 1778 Brick31 16383 "SNA" ;
+VAL_ 1778 Brick32 16383 "SNA" ;
+VAL_ 1778 Brick33 16383 "SNA" ;
+VAL_ 1778 Brick34 16383 "SNA" ;
+VAL_ 1778 Brick35 16383 "SNA" ;
+VAL_ 1778 Brick36 16383 "SNA" ;
+VAL_ 1778 Brick37 16383 "SNA" ;
+VAL_ 1778 Brick38 16383 "SNA" ;
+VAL_ 1778 Brick39 16383 "SNA" ;
+VAL_ 1778 Brick40 16383 "SNA" ;
+VAL_ 1778 Brick41 16383 "SNA" ;
+VAL_ 1778 Brick42 16383 "SNA" ;
+VAL_ 1778 Brick43 16383 "SNA" ;
+VAL_ 1778 Brick44 16383 "SNA" ;
+VAL_ 1778 Brick45 16383 "SNA" ;
+VAL_ 1778 Brick46 16383 "SNA" ;
+VAL_ 1778 Brick47 16383 "SNA" ;
+VAL_ 1778 Brick48 16383 "SNA" ;
+VAL_ 1778 Brick49 16383 "SNA" ;
+VAL_ 1778 Brick50 16383 "SNA" ;
+VAL_ 1778 Brick51 16383 "SNA" ;
+VAL_ 1778 Brick52 16383 "SNA" ;
+VAL_ 1778 Brick53 16383 "SNA" ;
+VAL_ 1778 Brick54 16383 "SNA" ;
+VAL_ 1778 Brick55 16383 "SNA" ;
+VAL_ 1778 Brick56 16383 "SNA" ;
+VAL_ 1778 Brick57 16383 "SNA" ;
+VAL_ 1778 Brick58 16383 "SNA" ;
+VAL_ 1778 Brick59 16383 "SNA" ;
+VAL_ 1778 Brick60 16383 "SNA" ;
+VAL_ 1778 Brick61 16383 "SNA" ;
+VAL_ 1778 Brick62 16383 "SNA" ;
+VAL_ 1778 Brick63 16383 "SNA" ;
+VAL_ 1778 Brick64 16383 "SNA" ;
+VAL_ 1778 Brick65 16383 "SNA" ;
+VAL_ 1778 Brick66 16383 "SNA" ;
+VAL_ 1778 Brick67 16383 "SNA" ;
+VAL_ 1778 Brick68 16383 "SNA" ;
+VAL_ 1778 Brick69 16383 "SNA" ;
+VAL_ 1778 Brick70 16383 "SNA" ;
+VAL_ 1778 Brick71 16383 "SNA" ;
+VAL_ 1778 Brick72 16383 "SNA" ;
+VAL_ 1778 Brick73 16383 "SNA" ;
+VAL_ 1778 Brick74 16383 "SNA" ;
+VAL_ 1778 Brick75 16383 "SNA" ;
+VAL_ 1778 Brick76 16383 "SNA" ;
+VAL_ 1778 Brick77 16383 "SNA" ;
+VAL_ 1778 Brick78 16383 "SNA" ;
+VAL_ 1778 Brick79 16383 "SNA" ;
+VAL_ 1778 Brick80 16383 "SNA" ;
+VAL_ 1778 Brick81 16383 "SNA" ;
+VAL_ 1778 Brick82 16383 "SNA" ;
+VAL_ 1778 Brick83 16383 "SNA" ;
+VAL_ 1778 Brick84 16383 "SNA" ;
+VAL_ 1778 Brick85 16383 "SNA" ;
+VAL_ 1778 Brick86 16383 "SNA" ;
+VAL_ 1778 Brick87 16383 "SNA" ;
+VAL_ 1778 Brick88 16383 "SNA" ;
+VAL_ 1778 Brick89 16383 "SNA" ;
+VAL_ 1778 Brick90 16383 "SNA" ;
+VAL_ 1778 Brick91 16383 "SNA" ;
+VAL_ 1778 Brick92 16383 "SNA" ;
+VAL_ 1778 Brick93 16383 "SNA" ;
+VAL_ 1778 Brick94 16383 "SNA" ;
+VAL_ 1778 Brick95 16383 "SNA" ;
