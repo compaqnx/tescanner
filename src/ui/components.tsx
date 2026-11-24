@@ -107,7 +107,8 @@ const STATUS_KEY: Record<TelemetryStatus, TranslationKey> = {
   error: 'statusError',
 };
 
-function formatElapsed(ms: number): string {
+/** mm:ss (or h:mm:ss) for a duration in ms. */
+export function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
@@ -150,6 +151,8 @@ export function ConnectionBar() {
     framesPerSecond,
     streamStartedAt,
     localizedError,
+    replay,
+    stopReplay,
   } = useApp();
   const elapsed = useElapsed(isStreaming ? streamStartedAt : null);
   const color = colors[STATUS_COLOR_KEY[status]];
@@ -211,6 +214,29 @@ export function ConnectionBar() {
         </View>
         {action}
       </View>
+      {replay.status !== 'idle' ? (
+        // Replayed values look like live ones, so say so on every screen.
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('replayBannerA11y')}
+          onPress={() => router.navigate('/record')}
+          style={styles.replayBanner}
+        >
+          <MaterialCommunityIcons
+            name={replay.status === 'paused' ? 'pause-circle-outline' : replay.status === 'playing' ? 'play-circle-outline' : 'replay'}
+            size={18}
+            color={colors.info}
+          />
+          <Text style={styles.replayText} numberOfLines={1}>
+            {t('replayBanner', {
+              position: formatElapsed(replay.positionMs),
+              duration: formatElapsed(replay.durationMs),
+              speed: replay.speed,
+            })}
+          </Text>
+          <Button compact variant="ghost" icon="stop" label={t('replayStop')} onPress={() => runAction('replay-stop', stopReplay)} />
+        </Pressable>
+      ) : null}
       {localizedError ? (
         <View style={styles.errorBanner}>
           <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.danger} />
@@ -536,6 +562,17 @@ const styles = themed(() =>
   connDot: { width: 10, height: 10, borderRadius: 5 },
   connStatus: { fontFamily: fonts.heading, fontSize: 13, letterSpacing: 0.6 },
   connMeta: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 },
+  replayBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.info,
+    paddingLeft: spacing.md,
+    minHeight: 40,
+  },
+  replayText: { color: colors.info, fontFamily: fonts.heading, fontSize: 13, flex: 1 },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',

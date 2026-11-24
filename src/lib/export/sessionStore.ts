@@ -339,6 +339,53 @@ export class SessionStore {
     }));
   }
 
+  /**
+   * Permanently deletes a recording (its frames and decoded signals). The
+   * session being recorded right now cannot be deleted.
+   */
+  async deleteSession(sessionId: string): Promise<void> {
+    if (sessionId === this.activeSessionId) {
+      throw new Error('Stop the recording before deleting it.');
+    }
+    const db = await this.getDb();
+    await db.withTransactionAsync(async () => {
+      await db.runAsync('DELETE FROM frame_log WHERE session_id = ?', sessionId);
+      await db.runAsync('DELETE FROM signal_log WHERE session_id = ?', sessionId);
+    });
+  }
+
+  /**
+   * One page of a recording's frames for replay, in time order, starting at
+   * `fromTs` (inclusive) after skipping rows up to `afterRowId` at that same ts.
+   * Paging keeps memory flat for long recordings.
+   */
+  async getFramePage(
+    sessionId: string,
+    fromTs: number,
+    afterRowId: number,
+    limit: number,
+  ): Promise<Array<StoredFrame & { rowId: number }>> {
+    const db = await this.getDb();
+    return db.getAllAsync<StoredFrame & { rowId: number }>(
+      `SELECT
+        id AS rowId,
+        session_id AS sessionId,
+        ts AS timestamp,
+        can_id AS canId,
+        raw_line AS rawLine,
+        payload_hex AS payloadHex
+      FROM frame_log
+      WHERE session_id = ? AND (ts > ? OR (ts = ? AND id > ?))
+      ORDER BY ts ASC, id ASC
+      LIMIT ?`,
+      sessionId,
+      fromTs,
+      fromTs,
+      afterRowId,
+      limit,
+    );
+  }
+
   async getFramesForSession(sessionId: string): Promise<StoredFrame[]> {
     const db = await this.getDb();
 

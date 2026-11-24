@@ -24,6 +24,7 @@ import {
   VEHICLE_PROFILES,
   type VehicleProfileId,
 } from '../lib/config/vehicleProfiles';
+import { IDLE_REPLAY, ReplayEngine, type ReplayState } from '../lib/replay/replayEngine';
 import { loadVehicleProfileId, saveVehicleProfileId } from '../lib/settings/settingsStore';
 import type { TeslaModelKey } from '../lib/vehicle/modelDetection';
 import { VehicleFingerprintCollector } from '../lib/vehicle/vehicleFingerprint';
@@ -132,6 +133,8 @@ export function useTelemetryController() {
   const rawCountersRef = useRef<RawCanCounters>({ lines: 0, unparsed: 0 });
   const frameCountRef = useRef(0);
   const rawFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replayEngineRef = useRef<ReplayEngine | null>(null);
+  const [replay, setReplay] = useState<ReplayState>(IDLE_REPLAY);
 
   const [status, setStatus] = useState<TelemetryStatus>('booting');
   const [error, setError] = useState<string | null>(null);
@@ -338,6 +341,10 @@ export function useTelemetryController() {
    */
   const identifyVehicle = useCallback(
     async (elm: Elm327Session, currentProfileId: VehicleProfileId): Promise<void> => {
+      // Connecting to a car ends any replay: its profile is about to be (re)chosen.
+      if (replayEngineRef.current?.active) {
+        currentProfileId = await stopReplayRef.current();
+      }
       appendLog('Listening to identify the vehicle…');
       const collector = new VehicleFingerprintCollector();
 
@@ -497,7 +504,10 @@ export function useTelemetryController() {
 
   /** Values from a car we are no longer connected to must not linger on screen. */
   const clearAfterDisconnect = useCallback(() => {
-    clearLiveSignalCache(true);
+    // A replay does not depend on the adapter: leave its values on screen.
+    if (!replayEngineRef.current?.active) {
+      clearLiveSignalCache(true);
+    }
     setDetectedVehicle(null);
     setSelectedDeviceId(null);
     setStatus('idle');
@@ -698,6 +708,10 @@ export function useTelemetryController() {
     }
 
     setError(null);
+    // A live stream replaces any replay on screen.
+    if (replayEngineRef.current?.active) {
+      await stopReplayRef.current();
+    }
     clearLiveSignalCache(true);
 
     const sessionId = await store.startSession();
@@ -742,6 +756,128 @@ export function useTelemetryController() {
     selectedVehicleProfile,
   ]);
 
+  /* ------------------------------------------------------------- replay */
+
+  /**
+   * A replayed frame goes through the same decode, alias, raw-view and counter
+   * path as a live one, but is never written back to the database.
+   */
+  const ingestReplayFrame = useCallback(
+    (frame: CanFrame) => {
+      const dbc = dbcRef.current;
+      frameCountRef.current += 1;
+      handleRawLine({ line: frame.rawLine, timestamp: frame.timestamp, frame });
+      if (dbc) {
+        void handleDecodedSignals(frame, decodeCanFrame(frame, dbc)).catch(() => undefined);
+      }
+    },
+    [handleDecodedSignals, handleRawLine],
+  );
+  const ingestReplayFrameRef = useRef(ingestReplayFrame);
+  ingestReplayFrameRef.current = ingestReplayFrame;
+
+  /** Profile (and bus) in use before a replay switched to the recording's own. */
+  const preReplayProfileRef = useRef<{ profileId: VehicleProfileId; bus: BusKind } | null>(null);
+
+  /** Stops the replay, clears its values and restores the profile; returns the profile now in use. */
+  const stopReplay = useCallback(async (): Promise<VehicleProfileId> => {
+    replayEngineRef.current?.stop();
+    clearLiveSignalCache(true);
+    const previous = preReplayProfileRef.current;
+    preReplayProfileRef.current = null;
+    if (previous) {
+      await applyProfile(previous.profileId, previous.bus);
+      appendLog(`Replay ended — restored the ${getVehicleProfileById(previous.profileId).name} profile.`);
+      return previous.profileId;
+    }
+    return selectedProfileRef.current;
+  }, [appendLog, applyProfile, clearLiveSignalCache]);
+  const stopReplayRef = useRef(stopReplay);
+  stopReplayRef.current = stopReplay;
+
+  const startReplay = useCallback(
+    async (sessionId: string) => {
+      const store = storeRef.current;
+      const engine = replayEngineRef.current;
+      if (!store || !engine) {
+        return;
+      }
+      if (status === 'streaming') {
+        setError('Stop the live stream before replaying a recording.');
+        return;
+      }
+      const session = recentSessions.find((entry) => entry.sessionId === sessionId);
+      if (!session || session.frameCount === 0) {
+        setError('This recording has no CAN frames to replay.');
+        return;
+      }
+
+      if (engine.active) {
+        await stopReplay();
+      }
+      setError(null);
+
+      // Decode with the profile the recording was made with: identify it from
+      // the recording's own ids (and VIN, if it was captured), as on connect.
+      const sample = await store.getFramePage(sessionId, session.startedAt, -1, 3_000);
+      const collector = new VehicleFingerprintCollector();
+      for (const row of sample) {
+        const data = /^[0-9A-Fa-f]*$/.test(row.payloadHex) && row.payloadHex.length % 2 === 0
+          ? Uint8Array.from(row.payloadHex.match(/.{2}/g) ?? [], (byte) => parseInt(byte, 16))
+          : new Uint8Array();
+        collector.add({ id: row.canId, data, timestamp: row.timestamp, rawLine: row.rawLine });
+      }
+      const familyDbcs = {} as Record<VehicleProfileId, DbcDatabase>;
+      for (const profile of VEHICLE_PROFILES) {
+        familyDbcs[profile.id] = await loadVehicleDbc(profile.id, 'all');
+      }
+      const fingerprint = collector.result(familyDbcs);
+      const family = fingerprint.family ?? selectedProfileRef.current;
+      const bus = (await pickBus(family, fingerprint.seenIds)) ?? busKindRef.current;
+      if (family !== selectedProfileRef.current || bus !== busKindRef.current) {
+        preReplayProfileRef.current = { profileId: selectedProfileRef.current, bus: busKindRef.current };
+        await applyProfile(family, bus);
+        appendLog(`Replay uses the ${getVehicleProfileById(family).name} profile (${bus} bus), matching the recording.`);
+      } else {
+        clearLiveSignalCache(true);
+      }
+
+      engine.start(session, 1);
+      appendLog(`Replaying recording from ${new Date(session.startedAt).toLocaleString()}.`);
+    },
+    [appendLog, applyProfile, clearLiveSignalCache, pickBus, recentSessions, status, stopReplay],
+  );
+
+  const pauseReplay = useCallback(() => replayEngineRef.current?.pause(), []);
+  const resumeReplay = useCallback(() => replayEngineRef.current?.resume(), []);
+  const setReplaySpeed = useCallback((speed: number) => replayEngineRef.current?.setSpeed(speed), []);
+  const seekReplay = useCallback((deltaMs: number) => replayEngineRef.current?.seekBy(deltaMs), []);
+  const restartReplay = useCallback(() => {
+    clearLiveSignalCache(true);
+    replayEngineRef.current?.seekTo(0);
+  }, [clearLiveSignalCache]);
+
+  /** Permanently deletes a saved recording (stopping its replay first). */
+  const deleteSession = useCallback(
+    async (sessionId: string) => {
+      const store = storeRef.current;
+      if (!store) {
+        return;
+      }
+      if (replayEngineRef.current?.current.sessionId === sessionId) {
+        await stopReplay();
+      }
+      try {
+        await store.deleteSession(sessionId);
+        setRecentSessions((current) => current.filter((entry) => entry.sessionId !== sessionId));
+        appendLog('Recording deleted.');
+      } catch (deleteError) {
+        setError(deleteError instanceof Error ? deleteError.message : String(deleteError));
+      }
+    },
+    [appendLog, stopReplay],
+  );
+
   const setVehicleProfile = useCallback(
     async (profileId: VehicleProfileId): Promise<void> => {
       if (profileId === selectedVehicleProfileId) {
@@ -750,6 +886,11 @@ export function useTelemetryController() {
 
       if (status === 'connecting' || status === 'connected' || status === 'streaming' || status === 'scanning') {
         setError('Switch vehicle profile while idle. Disconnect and stop streaming first.');
+        return;
+      }
+
+      if (replayEngineRef.current?.active) {
+        setError('Stop the replay before switching the vehicle profile.');
         return;
       }
 
@@ -895,6 +1036,7 @@ export function useTelemetryController() {
 
       bleRef.current = ble;
       storeRef.current = store;
+      replayEngineRef.current = new ReplayEngine(store, (frame) => ingestReplayFrameRef.current(frame), setReplay);
       ble.setLogger((message) => appendLogRef.current(message));
       ble.setDisconnectListener(() => {
         void handleLinkLostRef.current();
@@ -942,6 +1084,7 @@ export function useTelemetryController() {
 
     return () => {
       mounted = false;
+      replayEngineRef.current?.stop();
 
       if (rawFlushTimerRef.current) {
         clearTimeout(rawFlushTimerRef.current);
@@ -989,6 +1132,15 @@ export function useTelemetryController() {
     selectedVehicleProfile,
     detectedVehicle,
     busKind,
+    replay,
+    startReplay,
+    pauseReplay,
+    resumeReplay,
+    setReplaySpeed,
+    seekReplay,
+    restartReplay,
+    stopReplay,
+    deleteSession,
     canFilterEnabled,
     setCanFilterEnabled,
     pollCatalog,
